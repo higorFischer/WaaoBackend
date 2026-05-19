@@ -37,6 +37,13 @@ public class Collaborator : Entity
 	public DateTime? OnboardingCompletedAt { get; set; }
 
 	// ----- Auth -----
+	// Schema migration intentionally deferred to plan Task 2 (AddEmailVerification).
+	public bool EmailVerified { get; set; }
+	public string? EmailVerificationToken { get; set; }
+	public DateTime? EmailVerificationTokenExpiresAt { get; set; }
+	public DateTime? EmailVerifiedAt { get; set; }
+	public DateTime? LastVerificationEmailSentAt { get; set; }
+
 	public string? PasswordHash { get; set; }
 	public CollaboratorRoleKind RoleKind { get; set; } = CollaboratorRoleKind.Collaborator;
 	public DateTime? LastLoginAt { get; set; }
