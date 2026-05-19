@@ -36,3 +36,9 @@ public interface IGamificationService
 	Task<IReadOnlyList<LeaderboardEntryDto>> GetLeaderboardAsync(int take = 20, CancellationToken ct = default);
 	Task<IReadOnlyList<BadgeDto>> GetAllBadgesAsync(CancellationToken ct = default);
 }
+
+public interface IOnboardingService
+{
+	Task<OnboardingStatusDto> GetStatusAsync(Guid collaboratorId, CancellationToken ct = default);
+	Task<OnboardingStatusDto> CompleteAsync(Guid collaboratorId, CompleteOnboardingDto dto, CancellationToken ct = default);
+}
