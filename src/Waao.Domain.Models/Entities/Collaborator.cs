@@ -1,0 +1,47 @@
+using Waao.Domain.Models.Enums;
+
+namespace Waao.Domain.Models.Entities;
+
+public class Collaborator : Entity
+{
+	public string FullName { get; set; } = string.Empty;
+	public string Email { get; set; } = string.Empty;
+	public string? Cpf { get; set; }
+	public DateOnly? Birthdate { get; set; }
+	public DateOnly JoinDate { get; set; }
+	public DateOnly? TerminationDate { get; set; }
+	public string? PhotoUrl { get; set; }
+	public string? Bio { get; set; }
+	public CollaboratorStatus Status { get; set; } = CollaboratorStatus.Active;
+
+	public Guid? DepartmentId { get; set; }
+	public virtual Department? Department { get; set; }
+
+	public Guid? RoleId { get; set; }
+	public virtual Role? Role { get; set; }
+
+	public Guid? ManagerId { get; set; }
+	public virtual Collaborator? Manager { get; set; }
+	public virtual ICollection<Collaborator> DirectReports { get; set; } = [];
+
+	// ----- Gamification state -----
+	public long TotalXp { get; set; }
+	public int CurrentLevel { get; set; } = 1;
+	public int CurrentStreakDays { get; set; }
+	public int LongestStreakDays { get; set; }
+	public DateOnly? LastActivityDate { get; set; }
+
+	public bool OptInLeaderboards { get; set; } = true;
+
+	// ----- Auth -----
+	public string? PasswordHash { get; set; }
+	public CollaboratorRoleKind RoleKind { get; set; } = CollaboratorRoleKind.Collaborator;
+	public DateTime? LastLoginAt { get; set; }
+	public DateOnly? LastLoginDate { get; set; }
+	public int CurrentLoginStreakDays { get; set; }
+	public int LongestLoginStreakDays { get; set; }
+
+	public virtual ICollection<CareerEvent> CareerEvents { get; set; } = [];
+	public virtual ICollection<CollaboratorBadge> Badges { get; set; } = [];
+	public virtual ICollection<XpTransaction> XpTransactions { get; set; } = [];
+}
