@@ -86,3 +86,11 @@ public record UpsertLevelDefinitionDto
 	public string IconEmoji { get; init; } = "⭐";
 	public string ColorHex { get; init; } = "#6366F1";
 }
+
+// ----- XP Grant -----
+
+public record GrantXpDto
+{
+	public int Amount { get; init; }
+	public string Reason { get; init; } = string.Empty;
+}

@@ -19,6 +19,13 @@ public class AdminController(IAdminService Service) : ControllerBase
 	public async Task<IActionResult> Promote(Guid id, [FromBody] PromoteCollaboratorDto dto, CancellationToken ct)
 		=> Ok(await Service.PromoteAsync(id, dto, Me, ct));
 
+	[HttpPost("collaborators/{id:guid}/grant-xp")]
+	[ProducesResponseType(typeof(CollaboratorDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	public async Task<IActionResult> GrantXp(Guid id, [FromBody] GrantXpDto dto, CancellationToken ct)
+		=> Ok(await Service.GrantXpAsync(id, dto, Me, ct));
+
 	[HttpPatch("collaborators/{id:guid}/role-kind")]
 	public async Task<IActionResult> SetRoleKind(Guid id, [FromBody] SetRoleKindDto dto, CancellationToken ct)
 		=> Ok(await Service.SetRoleKindAsync(id, dto, Me, ct));

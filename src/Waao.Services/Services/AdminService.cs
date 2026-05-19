@@ -1,3 +1,4 @@
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Waao.Domain.Models.Entities;
 using Waao.Domain.Models.Enums;
@@ -12,7 +13,9 @@ namespace Waao.Services.Services;
 public sealed class AdminService(
 	WaaoDbContext Db,
 	StreakTracker Streaks,
-	BadgeEvaluator Badges) : IAdminService
+	BadgeEvaluator Badges,
+	GamificationEngine Gamification,
+	IValidator<GrantXpDto> GrantXpValidator) : IAdminService
 {
 	// =====================================================================
 	// PEOPLE
@@ -273,6 +276,29 @@ public sealed class AdminService(
 		l.IsDeleted = true;
 		l.DeletedAt = DateTime.UtcNow;
 		await Db.SaveChangesAsync(ct);
+	}
+
+	// =====================================================================
+	// XP GRANT
+	// =====================================================================
+
+	public async Task<CollaboratorDto> GrantXpAsync(Guid collaboratorId, GrantXpDto dto, Guid adminId, CancellationToken ct = default)
+	{
+		await GrantXpValidator.ValidateAndThrowAsync(dto, ct);
+
+		var c = await Db.Collaborators.FirstOrDefaultAsync(x => x.Id == collaboratorId, ct)
+			?? throw new KeyNotFoundException($"Collaborator {collaboratorId} not found.");
+
+		await Gamification.RecordAsync(
+			collaboratorId, dto.Amount, XpSource.Admin, dto.Reason,
+			adminId, "AdminGrant", ct);
+		await Db.SaveChangesAsync(ct);
+
+		var full = await Db.Collaborators
+			.Include(x => x.Department).Include(x => x.Role)
+			.Include(x => x.Manager).Include(x => x.Badges)
+			.FirstAsync(x => x.Id == collaboratorId, ct);
+		return CollaboratorMapper.ToDto(full);
 	}
 
 	// ----- helpers -----
