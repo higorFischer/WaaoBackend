@@ -26,12 +26,15 @@ public class Collaborator : Entity
 
 	// ----- Gamification state -----
 	public long TotalXp { get; set; }
-	public int CurrentLevel { get; set; } = 1;
+	public int CurrentLevel { get; set; } = 0;
 	public int CurrentStreakDays { get; set; }
 	public int LongestStreakDays { get; set; }
 	public DateOnly? LastActivityDate { get; set; }
 
 	public bool OptInLeaderboards { get; set; } = true;
+
+	// Schema migration intentionally deferred to plan Task 7 (ManualXpEconomyReset).
+	public DateTime? OnboardingCompletedAt { get; set; }
 
 	// ----- Auth -----
 	public string? PasswordHash { get; set; }

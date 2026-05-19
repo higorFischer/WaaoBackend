@@ -15,7 +15,35 @@ public sealed class GamificationService(WaaoDbContext Db) : IGamificationService
 		var levels = await Db.LevelDefinitions.OrderBy(l => l.Level).ToListAsync(ct);
 		if (levels.Count == 0) return Fallback(collab.TotalXp);
 
-		var current = levels.LastOrDefault(l => collab.TotalXp >= l.XpThreshold) ?? levels[0];
+		// Same semantic as GamificationEngine.ComputeLevelAsync: level 0 is the floor.
+		// Only positive-threshold definitions count as a "reached" level — a
+		// zero-threshold seed (e.g. L1 "Newcomer" @ 0) never lifts a 0-XP
+		// collaborator off level 0.
+		var current = levels.LastOrDefault(l => l.XpThreshold > 0 && collab.TotalXp >= l.XpThreshold);
+
+		if (current is null)
+		{
+			// Level 0: progress runs toward the lowest positive-threshold level.
+			var firstPositive = levels.FirstOrDefault(l => l.XpThreshold > 0);
+			if (firstPositive is null) return Fallback(collab.TotalXp);
+
+			var xpForNext0 = firstPositive.XpThreshold;
+			var pct0 = xpForNext0 == 0 ? 100 : (int)(collab.TotalXp * 100 / xpForNext0);
+
+			return new LevelProgressDto
+			{
+				CurrentLevel = 0,
+				CurrentTitle = "Unranked",
+				CurrentIcon = "⭐",
+				CurrentXp = collab.TotalXp,
+				XpIntoLevel = collab.TotalXp,
+				XpForNextLevel = xpForNext0,
+				ProgressPercent = Math.Clamp(pct0, 0, 100),
+				NextLevel = firstPositive.Level,
+				NextTitle = firstPositive.Title,
+			};
+		}
+
 		var next = levels.FirstOrDefault(l => l.Level > current.Level);
 
 		var xpInto = collab.TotalXp - current.XpThreshold;
@@ -38,18 +66,21 @@ public sealed class GamificationService(WaaoDbContext Db) : IGamificationService
 
 	private static LevelProgressDto Fallback(long totalXp)
 	{
+		// No usable level definitions => level 0 is the floor (consistent with
+		// GamificationEngine.ComputeLevelAsync). 0 XP stays level 0; a flat
+		// 500-XP band still drives the progress bar above the floor.
 		const int band = 500;
-		var lvl = (int)(totalXp / band) + 1;
+		var lvl = (int)(totalXp / band);
 		var into = totalXp % band;
 		return new LevelProgressDto
 		{
 			CurrentLevel = lvl,
-			CurrentTitle = $"Level {lvl}",
+			CurrentTitle = lvl == 0 ? "Unranked" : $"Level {lvl}",
 			CurrentIcon = "⭐",
 			CurrentXp = totalXp,
 			XpIntoLevel = into,
 			XpForNextLevel = band,
-			ProgressPercent = (int)(into * 100 / band),
+			ProgressPercent = Math.Clamp((int)(into * 100 / band), 0, 100),
 			NextLevel = lvl + 1,
 			NextTitle = $"Level {lvl + 1}",
 		};

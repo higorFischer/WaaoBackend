@@ -59,12 +59,14 @@ public sealed class GamificationEngine(WaaoDbContext Db)
 			.OrderBy(l => l.Level)
 			.ToListAsync(ct);
 
+		// No XP (or no definitions) => unranked level 0. Everyone starts here;
+		// only admin-granted XP moves a collaborator above 0.
 		if (definitions.Count == 0)
-			return Math.Max(1, (int)(totalXp / 500) + 1);   // fallback: flat 500 XP per level
+			return 0;
 
-		var lvl = 1;
+		var lvl = 0;
 		foreach (var def in definitions)
-			if (totalXp >= def.XpThreshold) lvl = def.Level;
+			if (def.XpThreshold > 0 && totalXp >= def.XpThreshold) lvl = def.Level;
 		return lvl;
 	}
 }
