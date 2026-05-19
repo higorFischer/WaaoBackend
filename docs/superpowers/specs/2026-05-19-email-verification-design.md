@@ -86,7 +86,11 @@ A rate-limited "resend verification email" path exists.
   role = `Admin` if email ∈ `Auth:AdminEmails` (case-insensitive) else
   `Collaborator`; create unverified; generate token (`RandomNumberGenerator`,
   32 bytes, base64url) + `ExpiresAt = UtcNow+24h`; set `LastVerificationEmailSentAt`;
-  call `IEmailSender`; return `RegisterResultDto`. Day-one badges/streak logic that
+  **persist the account first (SaveChanges), then send the email.** If the email
+  send throws, the unverified account still exists — register returns
+  `RegisterResultDto` normally (the user recovers via resend); the failure is
+  logged. Never leave the user without an account because email delivery hiccuped.
+  Returns `RegisterResultDto`. Day-one badges/streak logic that
   currently runs in register **moves to first successful verify/login** (no
   gamification side-effects for an unverified account).
 - `LoginAsync`: after password check, `if (!EmailVerified) throw new EmailNotVerifiedException(email);`
@@ -105,8 +109,10 @@ A rate-limited "resend verification email" path exists.
 - `ResendEmailSender` in `Waao.Services` — `HttpClient` POST to
   `https://api.resend.com/emails`, `Authorization: Bearer {Resend:ApiKey}`,
   JSON `{ from, to, subject, html }`. HTML body: branded WAAO verification
-  message + button/link. On non-success status → log + throw (register/resend
-  surface a 502-style error to the client except resend which still returns 200).
+  message + button/link. On non-success status → log + throw. Callers decide:
+  `register` and `resend` both **swallow** the send failure (account already
+  persisted; user recovers via resend) — neither fails the request on email
+  delivery. The throw is for observability/logging only.
 - `LoggingEmailSender` fallback registered when `Resend:ApiKey` is empty — logs
   `verifyUrl` at Information level.
 - DI: `builder.Services.AddHttpClient<ResendEmailSender>()`; pick sender by config.
