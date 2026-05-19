@@ -17,9 +17,13 @@
 		<PackageReference Include="coverlet.collector" Version="6.0.2" />
 	</ItemGroup>
 	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+	<ItemGroup>
 		<ProjectReference Include="..\..\src\Waao.Services\Waao.Services.csproj" />
 		<ProjectReference Include="..\..\src\Waao.Infra.EF\Waao.Infra.EF.csproj" />
 		<ProjectReference Include="..\..\src\Waao.Domain.Models\Waao.Domain.Models.csproj" />
 		<ProjectReference Include="..\..\src\Waao.Services.Abstractions\Waao.Services.Abstractions.csproj" />
+		<ProjectReference Include="..\..\src\Waao.API\Waao.API.csproj" />
 	</ItemGroup>
 </Project>

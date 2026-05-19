@@ -19,9 +19,27 @@ public class AuthController(IAuthService Service) : ControllerBase
 
 	[HttpPost("register")]
 	[AllowAnonymous]
-	[ProducesResponseType(typeof(AuthResultDto), StatusCodes.Status201Created)]
+	[ProducesResponseType(typeof(RegisterResultDto), StatusCodes.Status201Created)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	public async Task<IActionResult> Register([FromBody] RegisterDto dto, CancellationToken ct)
 		=> Created(string.Empty, await Service.RegisterAsync(dto, ct));
+
+	[HttpPost("verify-email")]
+	[AllowAnonymous]
+	[ProducesResponseType(typeof(AuthResultDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailDto dto, CancellationToken ct)
+		=> Ok(await Service.VerifyEmailAsync(dto, ct));
+
+	// Block body (not expression-bodied): the service returns void and the response is a fixed always-200 body — no controller logic, by design.
+	[HttpPost("resend-verification")]
+	[AllowAnonymous]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	public async Task<IActionResult> ResendVerification([FromBody] ResendVerificationDto dto, CancellationToken ct)
+	{
+		await Service.ResendVerificationAsync(dto, ct);
+		return Ok(new { status = "ok" });
+	}
 
 	[HttpGet("me")]
 	[Authorize]

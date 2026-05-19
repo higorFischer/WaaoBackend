@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FluentValidation;
+using Waao.Services.Abstractions;
 
 namespace Waao.API.Middleware;
 
@@ -59,6 +60,34 @@ public sealed class ExceptionHandlingMiddleware(RequestDelegate Next, ILogger<Ex
 				title = "Not found",
 				status = 404,
 				detail = ex.Message,
+			};
+			await context.Response.WriteAsync(JsonSerializer.Serialize(payload, JsonOptions));
+		}
+		catch (EmailNotVerifiedException ex)
+		{
+			context.Response.StatusCode = StatusCodes.Status403Forbidden;
+			context.Response.ContentType = "application/problem+json";
+			var payload = new
+			{
+				type = "https://datatracker.ietf.org/doc/html/rfc9110#name-403-forbidden",
+				title = "Email not verified",
+				status = 403,
+				code = "email_not_verified",
+				message = ex.Message,
+			};
+			await context.Response.WriteAsync(JsonSerializer.Serialize(payload, JsonOptions));
+		}
+		catch (InvalidVerificationTokenException ex)
+		{
+			context.Response.StatusCode = StatusCodes.Status400BadRequest;
+			context.Response.ContentType = "application/problem+json";
+			var payload = new
+			{
+				type = "https://datatracker.ietf.org/doc/html/rfc9110#name-400-bad-request",
+				title = "Invalid verification token",
+				status = 400,
+				code = "invalid_or_expired_token",
+				message = ex.Message,
 			};
 			await context.Response.WriteAsync(JsonSerializer.Serialize(payload, JsonOptions));
 		}
