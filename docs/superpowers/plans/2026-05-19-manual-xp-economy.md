@@ -4,7 +4,7 @@
 
 **Goal:** Make all XP admin-granted only (no automatic XP anywhere), reset every collaborator to level 0 / 0 XP, clear the XP ledger, and leave `higor@waao.com.br` as the sole seeded Admin.
 
-**Architecture:** Keep `GamificationEngine.RecordAsync` as the single XP write path but call it only from a new admin grant endpoint. Strip the XP-award calls out of `BadgeEvaluator`, `StreakTracker`, and `CareerEventService` (badges/streaks still run, 0 XP). Clamp levels to 0 below the first threshold. A destructive EF migration resets balances, hard-clears `xp_transactions`, and soft-deletes non-higor collaborators. Frontend gains an admin "Grant XP" control and drops auto XP/level-up celebrations.
+**Architecture:** Keep `GamificationEngine.RecordAsync` as the single XP write path but call it only from a new admin grant endpoint. Strip the XP-award calls out of `BadgeEvaluator`, `StreakTracker`, and `CareerEventService` (badges/streaks still run, 0 XP). **Folded in from the onboarding spec:** `BadgeEvaluator`/`StreakTracker` also fail-closed gate on `Collaborator.OnboardingCompletedAt` (no badges/streaks until onboarded); the column + backfill + bootstrap-admin onboarded-seed ride along in the entity edit and reset migration. Clamp levels to 0 below the first threshold. A destructive EF migration resets balances, hard-clears `xp_transactions`, soft-deletes non-higor collaborators, and backfills existing rows as onboarded. Frontend gains an admin "Grant XP" control and drops auto XP/level-up celebrations. (The onboarding **wizard UI + status/complete endpoints** are a separate Feature D plan, run after this.)
 
 **Tech Stack:** .NET 9, EF Core 9 + Npgsql (snake_case), FluentValidation, xUnit + FluentAssertions + EF InMemory (new test project), React 19 + TypeScript + axios + i18next.
 
@@ -182,7 +182,7 @@ In `src/Waao.Services/Gamification/GamificationEngine.cs`, replace the whole `Co
 	}
 ```
 
-- [ ] **Step 4: Change the entity default**
+- [ ] **Step 4: Change the entity default + add onboarding field**
 
 In `src/Waao.Domain.Models/Entities/Collaborator.cs`, change:
 ```csharp
@@ -191,6 +191,11 @@ In `src/Waao.Domain.Models/Entities/Collaborator.cs`, change:
 to:
 ```csharp
 	public int CurrentLevel { get; set; } = 0;
+```
+Then, in the same `// ----- Auth -----` / gamification region, add the onboarding
+field (folded in from the onboarding spec — null means not yet onboarded):
+```csharp
+	public DateTime? OnboardingCompletedAt { get; set; }
 ```
 
 - [ ] **Step 5: Run tests**
@@ -233,7 +238,7 @@ public class BadgeNoXpTests
 	public async Task FirstLoginBadge_Unlocks_ButGrantsNoXp()
 	{
 		using var db = TestDb.New();
-		var c = new Collaborator { Id = Guid.CreateVersion7(), FullName = "T", Email = "t@waao.com.br", JoinDate = DateOnly.FromDateTime(DateTime.UtcNow), LastLoginAt = DateTime.UtcNow };
+		var c = new Collaborator { Id = Guid.CreateVersion7(), FullName = "T", Email = "t@waao.com.br", JoinDate = DateOnly.FromDateTime(DateTime.UtcNow), LastLoginAt = DateTime.UtcNow, OnboardingCompletedAt = DateTime.UtcNow };
 		db.Collaborators.Add(c);
 		db.Badges.Add(new Badge { Id = Guid.CreateVersion7(), Code = "FIRST_LOGIN", Name = "Hello WAAO", Category = BadgeCategory.Activity, Rarity = BadgeRarity.Common, XpReward = 50, UnlockRule = "First successful login" });
 		await db.SaveChangesAsync();
@@ -247,6 +252,23 @@ public class BadgeNoXpTests
 		(await db.XpTransactions.CountAsync()).Should().Be(0);
 		(await db.Collaborators.FirstAsync()).TotalXp.Should().Be(0);
 	}
+
+	[Fact]
+	public async Task NotOnboarded_NoBadgesUnlock()
+	{
+		using var db = TestDb.New();
+		var c = new Collaborator { Id = Guid.CreateVersion7(), FullName = "T", Email = "t@waao.com.br", JoinDate = DateOnly.FromDateTime(DateTime.UtcNow), LastLoginAt = DateTime.UtcNow, OnboardingCompletedAt = null };
+		db.Collaborators.Add(c);
+		db.Badges.Add(new Badge { Id = Guid.CreateVersion7(), Code = "FIRST_LOGIN", Name = "Hello WAAO", Category = BadgeCategory.Activity, Rarity = BadgeRarity.Common, XpReward = 50, UnlockRule = "First successful login" });
+		await db.SaveChangesAsync();
+
+		var evaluator = new BadgeEvaluator(db, new GamificationEngine(db));
+		var awarded = await evaluator.EvaluateAsync(c.Id);
+		await db.SaveChangesAsync();
+
+		awarded.Should().BeEmpty();
+		(await db.CollaboratorBadges.CountAsync()).Should().Be(0);
+	}
 }
 ```
 
@@ -257,7 +279,20 @@ public class BadgeNoXpTests
 Run: `dotnet test tests/Waao.Tests --filter BadgeNoXpTests`
 Expected: FAIL — `XpTransactions` count is 1 (badge awards 50 XP).
 
-- [ ] **Step 3: Remove the XP-award block**
+- [ ] **Step 3a: Add the onboarding gate (folded in from onboarding spec)**
+
+At the very start of `EvaluateAsync` in `src/Waao.Services/Gamification/BadgeEvaluator.cs`, before any badge/context logic, add a fail-closed gate so no badge unlocks until onboarding is complete:
+```csharp
+		var onboarded = await Db.Collaborators
+			.Where(c => c.Id == collaboratorId)
+			.Select(c => c.OnboardingCompletedAt)
+			.FirstOrDefaultAsync(ct);
+		if (onboarded is null)
+			return [];
+```
+(`using Microsoft.EntityFrameworkCore;` is already in the file. Returning `[]` matches the `IReadOnlyList<Badge>` return type.)
+
+- [ ] **Step 3b: Remove the XP-award block**
 
 In `src/Waao.Services/Gamification/BadgeEvaluator.cs`, delete exactly this block (currently right after the `Db.CollaboratorBadges.Add(...)` call):
 ```csharp
@@ -320,6 +355,7 @@ public class StreakNoXpTests
 			JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
 			CurrentLoginStreakDays = 6,
 			LastLoginDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1),
+			OnboardingCompletedAt = DateTime.UtcNow,
 		};
 		db.Collaborators.Add(c);
 		await db.SaveChangesAsync();
@@ -334,6 +370,29 @@ public class StreakNoXpTests
 		(await db.XpTransactions.CountAsync()).Should().Be(0);
 		(await db.Collaborators.FirstAsync()).TotalXp.Should().Be(0);
 	}
+
+	[Fact]
+	public async Task NotOnboarded_StreakDoesNotAdvance()
+	{
+		using var db = TestDb.New();
+		var c = new Collaborator
+		{
+			Id = Guid.CreateVersion7(), FullName = "T", Email = "t@waao.com.br",
+			JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
+			CurrentLoginStreakDays = 6,
+			LastLoginDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1),
+			OnboardingCompletedAt = null,
+		};
+		db.Collaborators.Add(c);
+		await db.SaveChangesAsync();
+
+		var tracker = new StreakTracker(db, new GamificationEngine(db));
+		var (current, longest, bonus) = await tracker.RegisterLoginAsync(c.Id);
+		await db.SaveChangesAsync();
+
+		(current, longest, bonus).Should().Be((0, 0, 0));
+		(await db.Collaborators.FirstAsync()).CurrentLoginStreakDays.Should().Be(6); // unchanged
+	}
 }
 ```
 
@@ -342,7 +401,15 @@ public class StreakNoXpTests
 Run: `dotnet test tests/Waao.Tests --filter StreakNoXpTests`
 Expected: FAIL — `bonus` > 0 and an `XpTransaction` is created at the 7-day threshold.
 
-- [ ] **Step 3: Neutralize `AwardThresholdBonus`**
+- [ ] **Step 3a: Add the onboarding gate (folded in from onboarding spec)**
+
+In `src/Waao.Services/Gamification/StreakTracker.cs`, in **both** `RegisterActivityAsync` and `RegisterLoginAsync`, immediately after the existing `if (collaborator is null) return (0, 0, 0);` line, add:
+```csharp
+		if (collaborator.OnboardingCompletedAt is null) return (0, 0, 0);
+```
+This fail-closed gate means streaks do not advance and nothing is recorded until onboarding is complete.
+
+- [ ] **Step 3b: Neutralize `AwardThresholdBonus`**
 
 In `src/Waao.Services/Gamification/StreakTracker.cs`, replace the entire `AwardThresholdBonus` method (currently lines 72-92) with:
 ```csharp
@@ -402,7 +469,7 @@ public class CareerEventNoXpTests
 	public async Task CreatingCareerEvent_RecordsEvent_With0Xp_AndNoLevelChange()
 	{
 		using var db = TestDb.New();
-		var c = new Collaborator { Id = Guid.CreateVersion7(), FullName = "T", Email = "t@waao.com.br", JoinDate = DateOnly.FromDateTime(DateTime.UtcNow), CurrentLevel = 0 };
+		var c = new Collaborator { Id = Guid.CreateVersion7(), FullName = "T", Email = "t@waao.com.br", JoinDate = DateOnly.FromDateTime(DateTime.UtcNow), CurrentLevel = 0, OnboardingCompletedAt = DateTime.UtcNow };
 		db.Collaborators.Add(c);
 		await db.SaveChangesAsync();
 
@@ -691,6 +758,7 @@ public class SeedTests
 		users[0].Email.Should().Be("higor@waao.com.br");
 		users[0].RoleKind.Should().Be(CollaboratorRoleKind.Admin);
 		users[0].EmailVerified.Should().BeTrue();
+		users[0].OnboardingCompletedAt.Should().NotBeNull();
 		users[0].TotalXp.Should().Be(0);
 		users[0].CurrentLevel.Should().Be(0);
 	}
@@ -713,7 +781,12 @@ In `src/Waao.Infra.EF/Seeds/DbInitializer.cs`, replace the `users` array inside 
 			("higor@waao.com.br", "Higor", "Waao2026!", CollaboratorRoleKind.Admin, new DateOnly(2023, 1, 1)),
 		];
 ```
-In the same loop, when creating the `Collaborator`, also set verified state **if Feature C fields exist** (skip these two lines for B-only):
+In the same loop, when creating the `Collaborator`, always set onboarding as
+complete for the bootstrap admin (the field exists from Task 2's entity edit):
+```csharp
+				OnboardingCompletedAt = DateTime.UtcNow,
+```
+And also set verified state **if Feature C fields exist** (skip these two lines for B-only):
 ```csharp
 				EmailVerified = true,
 				EmailVerifiedAt = DateTime.UtcNow,
@@ -735,13 +808,25 @@ Expected: a new migration class created under `src/Waao.Infra.EF/Migrations/`.
 
 - [ ] **Step 6: Edit the migration `Up` to add the data reset**
 
-Open the generated `<timestamp>_ManualXpEconomyReset.cs`. It will already contain the `current_level` default change if the model diff produced one; if it did NOT (defaults sometimes don't diff), add the column default alter. Then append the destructive data steps at the end of `Up`:
+Open the generated `<timestamp>_ManualXpEconomyReset.cs`. The model diff should
+contain the **new `onboarding_completed_at` column** (nullable `timestamp with time zone`,
+added because Task 2 added `Collaborator.OnboardingCompletedAt`) and may contain the
+`current_level` default change. If the `AddColumn` for `onboarding_completed_at` is
+present, keep it. If the `current_level` default change did NOT diff (defaults
+sometimes don't), add the column default alter. Then append the destructive data
+steps at the end of `Up` (after any generated `AddColumn`):
 ```csharp
 			migrationBuilder.Sql("ALTER TABLE collaborators ALTER COLUMN current_level SET DEFAULT 0;");
 			migrationBuilder.Sql("UPDATE collaborators SET total_xp = 0, current_level = 0;");
 			migrationBuilder.Sql("DELETE FROM xp_transactions;");
 			migrationBuilder.Sql("UPDATE collaborators SET is_deleted = true, deleted_at = now(), updated_at = now() WHERE lower(email) <> 'higor@waao.com.br' AND is_deleted = false;");
+			// Folded in from onboarding spec: existing (pre-onboarding) users are
+			// considered already onboarded so they are not nagged / gamification-gated.
+			migrationBuilder.Sql("UPDATE collaborators SET onboarding_completed_at = now() WHERE onboarding_completed_at IS NULL AND is_deleted = false;");
 ```
+> If the generated migration did NOT include the `onboarding_completed_at`
+> `AddColumn` (e.g. the model snapshot was stale), add it explicitly in `Up`
+> before the SQL block: `migrationBuilder.AddColumn<DateTime>(name: "onboarding_completed_at", table: "collaborators", type: "timestamp with time zone", nullable: true);` and the matching `DropColumn` in `Down`.
 In `Down`, only revert the schema default (data steps are intentionally irreversible — add a comment):
 ```csharp
 			// Data reset (XP wipe, ledger clear, user soft-delete) is intentionally NOT reversible.
@@ -899,4 +984,6 @@ Append a dated entry to the vault journal `Memory/Journals/WAAO/` noting the man
 
 **Placeholder scan:** No "TBD/handle edge cases" — code shown for every code step. Two explicit conditional branches (Feature-C `EmailVerified` fields; admin-panel vs detail page) are decision instructions with concrete fallbacks, not placeholders.
 
-**Type consistency:** `GrantXpDto {Amount:int, Reason:string}` consistent across DTO/validator/service/controller/test/frontend. `GrantXpAsync(Guid, GrantXpDto, Guid, CancellationToken):Task<CollaboratorDto>` identical in interface, impl, controller call, tests. `XpSource.Admin` (existing enum, value 99). `ComputeLevelAsync` returns `int` 0-based throughout.
+**Type consistency:** `GrantXpDto {Amount:int, Reason:string}` consistent across DTO/validator/service/controller/test/frontend. `GrantXpAsync(Guid, GrantXpDto, Guid, CancellationToken):Task<CollaboratorDto>` identical in interface, impl, controller call, tests. `XpSource.Admin` (existing enum, value 99). `ComputeLevelAsync` returns `int` 0-based throughout. `Collaborator.OnboardingCompletedAt` is `DateTime?` everywhere (entity, gate checks in BadgeEvaluator/StreakTracker, seed, migration backfill, tests); admin grant path bypasses the gate intentionally (admin override) so GrantXpTests need no `OnboardingCompletedAt`.
+
+**Onboarding-fold coverage:** gate added in Task 3 (BadgeEvaluator Step 3a + `NotOnboarded_NoBadgesUnlock` test) and Task 4 (StreakTracker Step 3a + `NotOnboarded_StreakDoesNotAdvance` test); column/backfill in Task 7 Step 6; bootstrap-admin onboarded seed + assertion in Task 7 Steps 3/1; entity field in Task 2 Step 4. The onboarding **wizard/endpoints/banner** are intentionally NOT here (separate Feature D).

@@ -29,7 +29,11 @@ A rate-limited "resend verification email" path exists.
 2. User opens `<Frontend:BaseUrl>/verify-email?token=…`. Frontend calls
    `POST /auth/verify-email { token }`. Service validates token + expiry, sets
    `EmailVerified=true`, `EmailVerifiedAt=now`, clears the token, and issues a
-   JWT (auto-login). Frontend redirects to the dashboard.
+   JWT (auto-login). Frontend redirects to the app. **Sequencing note (Feature D,
+   B→C→D→A):** a freshly verified user has `OnboardingCompletedAt = null`, so
+   post-verify they land in the app with the onboarding banner/wizard
+   (`/onboarding`) and gamification stays suppressed until onboarding completes.
+   Verification only proves email ownership; it does not complete onboarding.
 3. `POST /auth/login` on an unverified account throws `EmailNotVerifiedException`
    → controller maps to **403** `{ code: "email_not_verified" }`. Frontend shows
    an inline "resend verification" affordance.

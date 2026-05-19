@@ -132,6 +132,21 @@ After this spec is approved, the email-verification spec
 - C's migration backfill (`email_verified = true` for existing rows) still applies;
   with B, the only existing row is `higor@waao.com.br` (already verified by seed).
 
+## Interaction with Feature D (onboarding) — folded in
+
+Per the approved onboarding design (`2026-05-19-onboarding-design.md`), the
+**backend gamification gate** is folded into this feature to avoid editing
+`BadgeEvaluator`/`StreakTracker`/the reset migration twice:
+- `Collaborator.OnboardingCompletedAt` (`DateTime?`) is added alongside the
+  `CurrentLevel` default change.
+- `BadgeEvaluator.EvaluateAsync` and `StreakTracker.RegisterLogin/ActivityAsync`
+  fail-closed early-return when `OnboardingCompletedAt is null` (no badges/streaks
+  until onboarded) — in addition to the 0-XP changes above.
+- The reset migration also adds `onboarding_completed_at` and backfills existing
+  non-deleted rows to `now()`; seeded `higor@waao.com.br` is onboarded.
+- The onboarding **wizard UI + status/complete endpoints + banner** are NOT in
+  this feature — they are Feature D, implemented after B.
+
 ## Error contract
 
 | Case | HTTP | Body |
