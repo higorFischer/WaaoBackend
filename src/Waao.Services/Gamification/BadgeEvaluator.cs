@@ -14,10 +14,17 @@ public sealed record EvalContext(
 	int KanbanCommentsAuthored,
 	int KanbanEpicsCompleted);
 
-public sealed class BadgeEvaluator(WaaoDbContext Db, GamificationEngine Gamification)
+public sealed class BadgeEvaluator(WaaoDbContext Db)
 {
 	public async Task<IReadOnlyList<Badge>> EvaluateAsync(Guid collaboratorId, CancellationToken ct = default)
 	{
+		var onboarded = await Db.Collaborators
+			.Where(c => c.Id == collaboratorId)
+			.Select(c => c.OnboardingCompletedAt)
+			.FirstOrDefaultAsync(ct);
+		if (onboarded is null)
+			return [];
+
 		var collaborator = await Db.Collaborators
 			.Include(c => c.Badges).ThenInclude(b => b.Badge)
 			.Include(c => c.DirectReports)
@@ -67,12 +74,6 @@ public sealed class BadgeEvaluator(WaaoDbContext Db, GamificationEngine Gamifica
 				Context = badge.UnlockRule,
 			});
 
-			if (badge.XpReward > 0)
-			{
-				await Gamification.RecordAsync(
-					collaboratorId, badge.XpReward, XpSource.BadgeUnlock,
-					$"Badge unlocked: {badge.Name}", badge.Id, nameof(Badge), ct);
-			}
 			awards.Add(badge);
 		}
 		return awards;
