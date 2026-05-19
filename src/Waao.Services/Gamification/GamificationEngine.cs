@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Waao.Domain.Models.Entities;
 using Waao.Domain.Models.Enums;
-using Waao.Domain.Models.Rules;
 using Waao.Infra.EF;
 
 namespace Waao.Services.Gamification;
@@ -12,17 +11,6 @@ namespace Waao.Services.Gamification;
 /// </summary>
 public sealed class GamificationEngine(WaaoDbContext Db)
 {
-	public async Task<int> AwardCareerEventXpAsync(CareerEvent evt, CancellationToken ct = default)
-	{
-		var amount = XpRules.XpForCareerEvent(evt.Type);
-		if (amount <= 0) return 0;
-
-		var reason = $"{evt.Type}: {evt.Title}";
-		await RecordAsync(evt.CollaboratorId, amount, XpSource.CareerEvent, reason, evt.Id, nameof(CareerEvent), ct);
-		evt.XpAwarded = amount;
-		return amount;
-	}
-
 	public async Task RecordAsync(
 		Guid collaboratorId,
 		int amount,

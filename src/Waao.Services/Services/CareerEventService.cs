@@ -11,7 +11,6 @@ namespace Waao.Services.Services;
 
 public sealed class CareerEventService(
 	WaaoDbContext Db,
-	GamificationEngine Gamification,
 	StreakTracker Streaks,
 	BadgeEvaluator Badges,
 	IValidator<CreateCareerEventDto> CreateValidator) : ICareerEventService
@@ -45,8 +44,9 @@ public sealed class CareerEventService(
 		};
 		Db.CareerEvents.Add(entity);
 
-		// 1. XP for the event itself
-		var eventXp = await Gamification.AwardCareerEventXpAsync(entity, ct);
+		// XP is admin-granted only — career events no longer auto-award XP.
+		const int eventXp = 0;
+		entity.XpAwarded = 0;
 		// 2. Streak state + any streak-threshold bonus
 		var (currentStreak, _, streakBonus) = await Streaks.RegisterActivityAsync(dto.CollaboratorId, dto.EventDate, ct);
 		// 3. Persist so the badge evaluator reads this event + the updated streak state

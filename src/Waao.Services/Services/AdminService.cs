@@ -11,7 +11,6 @@ namespace Waao.Services.Services;
 
 public sealed class AdminService(
 	WaaoDbContext Db,
-	GamificationEngine Gamification,
 	StreakTracker Streaks,
 	BadgeEvaluator Badges) : IAdminService
 {
@@ -49,7 +48,7 @@ public sealed class AdminService(
 
 		c.UpdatedAt = DateTime.UtcNow;
 
-		// Log the promotion as a CareerEvent — this auto-grants XP and triggers badge eval.
+		// Log the promotion as a CareerEvent — triggers streak tracking and badge evaluation (XP is admin-granted only).
 		var evt = new CareerEvent
 		{
 			Id = Guid.CreateVersion7(),
@@ -63,7 +62,8 @@ public sealed class AdminService(
 		};
 		Db.CareerEvents.Add(evt);
 
-		await Gamification.AwardCareerEventXpAsync(evt, ct);
+		// XP is admin-granted only — promotions no longer auto-award XP via career events.
+		evt.XpAwarded = 0;
 		await Streaks.RegisterActivityAsync(c.Id, evt.EventDate, ct);
 		await Db.SaveChangesAsync(ct);
 		await Badges.EvaluateAsync(c.Id, ct);
