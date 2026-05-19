@@ -38,6 +38,9 @@ public sealed class AuthService(
 			!PasswordHasher.Verify(dto.Password, collaborator.PasswordHash))
 			throw new UnauthorizedAccessException("Invalid email or password.");
 
+		if (!collaborator.EmailVerified)
+			throw new EmailNotVerifiedException(collaborator.Email);
+
 		var (streakDays, _, bonus) = await Streaks.RegisterLoginAsync(collaborator.Id, ct: ct);
 		await Db.SaveChangesAsync(ct);
 
@@ -83,12 +86,51 @@ public sealed class AuthService(
 		return new RegisterResultDto { Status = "verification_sent", Email = entity.Email };
 	}
 
-	// Temporary stubs — real implementations delivered in C6
-	public Task<AuthResultDto> VerifyEmailAsync(VerifyEmailDto dto, CancellationToken ct = default)
-		=> throw new NotImplementedException();
+	public async Task<AuthResultDto> VerifyEmailAsync(VerifyEmailDto dto, CancellationToken ct = default)
+	{
+		await VerifyEmailValidator.ValidateAndThrowAsync(dto, ct);
 
-	public Task ResendVerificationAsync(ResendVerificationDto dto, CancellationToken ct = default)
-		=> throw new NotImplementedException();
+		var c = await Db.Collaborators
+			.Include(x => x.Department).Include(x => x.Role).Include(x => x.Manager).Include(x => x.Badges)
+			.FirstOrDefaultAsync(x => x.EmailVerificationToken == dto.Token, ct);
+		if (c is null || c.EmailVerificationTokenExpiresAt is null || c.EmailVerificationTokenExpiresAt < DateTime.UtcNow)
+			throw new InvalidVerificationTokenException();
+
+		c.EmailVerified = true;
+		c.EmailVerifiedAt = DateTime.UtcNow;
+		c.EmailVerificationToken = null;
+		c.EmailVerificationTokenExpiresAt = null;
+		c.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+
+		var (streakDays, _, bonus) = await Streaks.RegisterLoginAsync(c.Id, ct: ct);
+		await Db.SaveChangesAsync(ct);
+		var newBadges = await Badges.EvaluateAsync(c.Id, ct);
+		await Db.SaveChangesAsync(ct);
+		return BuildResult(c, streakDays, bonus, newBadges);
+	}
+
+	public async Task ResendVerificationAsync(ResendVerificationDto dto, CancellationToken ct = default)
+	{
+		await ResendValidator.ValidateAndThrowAsync(dto, ct);
+
+		var c = await Db.Collaborators.FirstOrDefaultAsync(x => x.Email == dto.Email, ct);
+		if (c is null || c.EmailVerified) return;
+		if (c.LastVerificationEmailSentAt is not null && (DateTime.UtcNow - c.LastVerificationEmailSentAt.Value).TotalSeconds < 60)
+			return;
+
+		c.EmailVerificationToken = NewToken();
+		c.EmailVerificationTokenExpiresAt = DateTime.UtcNow.AddHours(24);
+		c.LastVerificationEmailSentAt = DateTime.UtcNow;
+		c.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+
+		var baseUrl = Configuration["Frontend:BaseUrl"] ?? "https://waao-frontend.higorflopes.workers.dev";
+		var verifyUrl = $"{baseUrl}/verify-email?token={c.EmailVerificationToken}";
+		try { await EmailSender.SendVerificationAsync(c.Email, c.FullName, verifyUrl, ct); }
+		catch (OperationCanceledException) { throw; }
+		catch (Exception ex) { Logger.LogError(ex, "Resend verification email failed for {Email}", c.Email); }
+	}
 
 	public async Task ChangePasswordAsync(Guid collaboratorId, ChangePasswordDto dto, CancellationToken ct = default)
 	{
