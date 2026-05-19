@@ -22,5 +22,7 @@ public sealed class SeedTests
 		users[0].OnboardingCompletedAt.Should().NotBeNull();
 		users[0].TotalXp.Should().Be(0);
 		users[0].CurrentLevel.Should().Be(0);
+		users[0].EmailVerified.Should().BeTrue();
+		users[0].EmailVerifiedAt.Should().NotBeNull();
 	}
 }

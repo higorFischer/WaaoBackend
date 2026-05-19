@@ -183,6 +183,8 @@ public static class DbInitializer
 				RoleKind = role,
 				PasswordHash = HashPassword(password),
 				OnboardingCompletedAt = DateTime.UtcNow,
+				EmailVerified = true,
+				EmailVerifiedAt = DateTime.UtcNow,
 			});
 		}
 	}
