@@ -73,6 +73,7 @@ builder.Services.AddScoped<ICareerEventService, CareerEventService>();
 builder.Services.AddScoped<IGamificationService, GamificationService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IKanbanService, Waao.Services.Services.Kanban.KanbanService>();
+builder.Services.AddScoped<IOnboardingService, OnboardingService>();
 
 // Documentation viewer (clones WaaoDocs locally + serves to frontend)
 builder.Services.Configure<Waao.Services.Documentation.DocumentationOptions>(builder.Configuration.GetSection("Documentation"));
