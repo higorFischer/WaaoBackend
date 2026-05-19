@@ -1,6 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Waao.Domain.Models.Enums;
-using Waao.Domain.Models.Rules;
 using Waao.Infra.EF;
 
 namespace Waao.Services.Gamification;
@@ -8,19 +6,22 @@ namespace Waao.Services.Gamification;
 /// <summary>
 /// Updates a collaborator's streak state after any interaction.
 /// Rule: same-day = no change. +1 day = streak continues. >1 day = reset to 1.
-/// When the streak crosses a threshold in XpRules.StreakBonus, awards the bonus once.
+/// Streaks are tracked only — they grant NO XP (XP is admin-granted only).
+/// Not-yet-onboarded collaborators are excluded entirely: when
+/// OnboardingCompletedAt is null the streak is left unchanged.
 ///
 /// Two streams:
 ///  - Activity streak (career events) — RegisterActivityAsync
 ///  - Login streak (auth)              — RegisterLoginAsync
 /// </summary>
-public sealed class StreakTracker(WaaoDbContext Db, GamificationEngine Gamification)
+public sealed class StreakTracker(WaaoDbContext Db)
 {
 	public async Task<(int current, int longest, int bonusAwarded)> RegisterActivityAsync(
 		Guid collaboratorId, DateOnly? activityDate = null, CancellationToken ct = default)
 	{
 		var collaborator = await Db.Collaborators.FirstOrDefaultAsync(c => c.Id == collaboratorId, ct);
 		if (collaborator is null) return (0, 0, 0);
+		if (collaborator.OnboardingCompletedAt is null) return (0, 0, 0);
 
 		var today = activityDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
 		var last = collaborator.LastActivityDate;
@@ -41,6 +42,7 @@ public sealed class StreakTracker(WaaoDbContext Db, GamificationEngine Gamificat
 	{
 		var collaborator = await Db.Collaborators.FirstOrDefaultAsync(c => c.Id == collaboratorId, ct);
 		if (collaborator is null) return (0, 0, 0);
+		if (collaborator.OnboardingCompletedAt is null) return (0, 0, 0);
 
 		var today = loginDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
 		var last = collaborator.LastLoginDate;
@@ -69,25 +71,9 @@ public sealed class StreakTracker(WaaoDbContext Db, GamificationEngine Gamificat
 		};
 	}
 
-	private async Task<int> AwardThresholdBonus(
+	// Streaks are still tracked, but no longer grant XP — XP is admin-only.
+	// Kept as a no-op so the call sites and return contract are unchanged.
+	private static Task<int> AwardThresholdBonus(
 		Guid collaboratorId, int prevStreak, int currentStreak, string label, CancellationToken ct)
-	{
-		var bonus = 0;
-		int[] thresholds = [7, 30, 90, 180, 365];
-		foreach (var t in thresholds)
-		{
-			if (currentStreak >= t && prevStreak < t)
-			{
-				var delta = XpRules.StreakBonus(t);
-				if (delta > 0)
-				{
-					await Gamification.RecordAsync(
-						collaboratorId, delta, XpSource.StreakBonus,
-						$"{t}-day {label} bonus", collaboratorId, "Streak", ct);
-					bonus += delta;
-				}
-			}
-		}
-		return bonus;
-	}
+		=> Task.FromResult(0);
 }
