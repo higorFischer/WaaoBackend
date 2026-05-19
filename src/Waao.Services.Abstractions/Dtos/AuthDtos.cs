@@ -34,6 +34,22 @@ public record ChangePasswordDto
 	public string NewPassword { get; init; } = string.Empty;
 }
 
+public record VerifyEmailDto
+{
+	public string Token { get; init; } = string.Empty;
+}
+
+public record ResendVerificationDto
+{
+	public string Email { get; init; } = string.Empty;
+}
+
+public record RegisterResultDto
+{
+	public string Status { get; init; } = "verification_sent";
+	public string Email { get; init; } = string.Empty;
+}
+
 public record JwtSettings
 {
 	public string Issuer { get; init; } = "waao";

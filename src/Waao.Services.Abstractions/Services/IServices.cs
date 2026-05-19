@@ -21,9 +21,11 @@ public interface ICareerEventService
 public interface IAuthService
 {
 	Task<AuthResultDto> LoginAsync(LoginDto dto, CancellationToken ct = default);
-	Task<AuthResultDto> RegisterAsync(RegisterDto dto, CancellationToken ct = default);
+	Task<RegisterResultDto> RegisterAsync(RegisterDto dto, CancellationToken ct = default);
 	Task ChangePasswordAsync(Guid collaboratorId, ChangePasswordDto dto, CancellationToken ct = default);
 	Task<CollaboratorDto?> GetMeAsync(Guid collaboratorId, CancellationToken ct = default);
+	Task<AuthResultDto> VerifyEmailAsync(VerifyEmailDto dto, CancellationToken ct = default);
+	Task ResendVerificationAsync(ResendVerificationDto dto, CancellationToken ct = default);
 }
 
 public interface IGamificationService

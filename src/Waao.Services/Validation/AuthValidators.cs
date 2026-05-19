@@ -18,6 +18,9 @@ public class RegisterValidator : AbstractValidator<RegisterDto>
 	{
 		RuleFor(x => x.FullName).NotEmpty().MaximumLength(200);
 		RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(200);
+		RuleFor(x => x.Email)
+			.Matches(@"^[^@\s]+@waao\.com\.br$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+			.WithMessage("Email must be a @waao.com.br address.");
 		RuleFor(x => x.Password)
 			.NotEmpty()
 			.MinimumLength(8).WithMessage("Password must be at least 8 characters.")
@@ -27,6 +30,16 @@ public class RegisterValidator : AbstractValidator<RegisterDto>
 			.LessThanOrEqualTo(_ => DateOnly.FromDateTime(DateTime.UtcNow).AddDays(30))
 			.GreaterThan(new DateOnly(1970, 1, 1));
 	}
+}
+
+public class VerifyEmailValidator : AbstractValidator<VerifyEmailDto>
+{
+	public VerifyEmailValidator() => RuleFor(x => x.Token).NotEmpty();
+}
+
+public class ResendVerificationValidator : AbstractValidator<ResendVerificationDto>
+{
+	public ResendVerificationValidator() => RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(200);
 }
 
 public class ChangePasswordValidator : AbstractValidator<ChangePasswordDto>
