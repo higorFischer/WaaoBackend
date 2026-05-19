@@ -17,6 +17,7 @@ public class CollaboratorConfiguration : IEntityTypeConfiguration<Collaborator>
 		builder.Property(x => x.Status).HasConversion<string>();
 		builder.Property(x => x.RoleKind).HasConversion<string>();
 		builder.Property(x => x.PasswordHash).HasMaxLength(500);
+		builder.Property(x => x.CurrentLevel).HasDefaultValue(0);
 
 		builder.HasIndex(x => x.Email).IsUnique().HasFilter("is_deleted = false");
 

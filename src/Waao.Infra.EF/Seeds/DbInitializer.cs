@@ -167,9 +167,7 @@ public static class DbInitializer
 	{
 		(string Email, string Name, string Password, CollaboratorRoleKind Role, DateOnly JoinDate)[] users =
 		[
-			("admin@waao.com", "WAAO Admin",   "Waao2026!", CollaboratorRoleKind.Admin,        new DateOnly(2023, 1, 1)),
-			("hr@waao.com",    "WAAO HR",      "Waao2026!", CollaboratorRoleKind.HR,           new DateOnly(2023, 6, 1)),
-			("demo@waao.com",  "Demo User",    "Waao2026!", CollaboratorRoleKind.Collaborator, new DateOnly(2024, 9, 15)),
+			("higor@waao.com.br", "Higor", "Waao2026!", CollaboratorRoleKind.Admin, new DateOnly(2023, 1, 1)),
 		];
 
 		foreach (var (email, name, password, role, joinDate) in users)
@@ -184,6 +182,7 @@ public static class DbInitializer
 				JoinDate = joinDate,
 				RoleKind = role,
 				PasswordHash = HashPassword(password),
+				OnboardingCompletedAt = DateTime.UtcNow,
 			});
 		}
 	}
