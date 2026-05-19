@@ -19,9 +19,8 @@ using Waao.Services.Validation;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Database
-var connectionString = builder.Configuration.GetConnectionString("Default")
-	?? "Host=localhost;Port=5432;Database=WaaoLocal;Username=postgres;Password=postgres";
+// Database — DATABASE_URL (Fly Postgres, postgres:// form) takes precedence over config
+var connectionString = BuildConnectionString(builder.Configuration);
 builder.Services.AddDbContext<WaaoDbContext>(options =>
 	options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention());
 
@@ -108,21 +107,47 @@ builder.Services.AddSwaggerGen(options =>
 	});
 });
 
-// CORS for the frontend dev server
+// CORS — origins from config (Cors:AllowedOrigins, comma-separated); defaults to dev servers
+var corsOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? "http://localhost:5173,http://localhost:3000")
+	.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(options =>
 	options.AddPolicy("Frontend", p => p
-		.WithOrigins("http://localhost:5173", "http://localhost:3000")
+		.WithOrigins(corsOrigins)
 		.AllowAnyHeader()
 		.AllowAnyMethod()));
 
 var app = builder.Build();
 
-// Apply migrations + seed reference data on startup (dev convenience)
+// Apply migrations + seed reference data on startup.
+// Serialize across instances with a Postgres session advisory lock: with >1 machine
+// (or overlapping machines during a rolling deploy) booting at once, the seed guards
+// (AnyAsync) and the single SaveChanges are not atomic across processes — both would
+// pass the empty-table check and the second insert would violate ix_badges_code.
+// The lock makes one instance run migrate+seed while others wait, then no-op via the
+// guards. Session-scoped + finally: auto-released on machine death, so no deadlock.
 using (var scope = app.Services.CreateScope())
 {
+	const long startupInitLockKey = 727274001L;
 	var db = scope.ServiceProvider.GetRequiredService<WaaoDbContext>();
-	await db.Database.MigrateAsync();
-	await DbInitializer.SeedAsync(db);
+	var conn = db.Database.GetDbConnection();
+	await conn.OpenAsync();
+	try
+	{
+		await using (var lockCmd = conn.CreateCommand())
+		{
+			lockCmd.CommandText = $"SELECT pg_advisory_lock({startupInitLockKey})";
+			await lockCmd.ExecuteNonQueryAsync();
+		}
+
+		await db.Database.MigrateAsync();
+		await DbInitializer.SeedAsync(db);
+	}
+	finally
+	{
+		await using var unlockCmd = conn.CreateCommand();
+		unlockCmd.CommandText = $"SELECT pg_advisory_unlock({startupInitLockKey})";
+		await unlockCmd.ExecuteNonQueryAsync();
+	}
 }
 
 if (app.Environment.IsDevelopment())
@@ -138,5 +163,37 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.MapGet("/", () => Results.Redirect("/swagger")).AllowAnonymous();
+app.MapGet("/health", () => Results.Ok(new { status = "healthy", service = "waao-api", timestamp = DateTime.UtcNow }))
+	.AllowAnonymous();
 
 app.Run();
+
+// Build the EF connection string. Fly Postgres injects DATABASE_URL in postgres:// form;
+// fall back to ConnectionStrings:Default for local dev. Respects the URL's sslmode
+// (Fly attach uses Flycast internal network with ?sslmode=disable).
+static string BuildConnectionString(IConfiguration config)
+{
+	var url = Environment.GetEnvironmentVariable("DATABASE_URL");
+	if (string.IsNullOrWhiteSpace(url))
+		return config.GetConnectionString("Default")
+			?? "Host=localhost;Port=5432;Database=WaaoLocal;Username=postgres;Password=postgres";
+
+	var uri = new Uri(url);
+	var userInfo = uri.UserInfo.Split(':', 2);
+	var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+	var sslMode = query["sslmode"]?.ToLowerInvariant() switch
+	{
+		"disable" => Npgsql.SslMode.Disable,
+		"require" => Npgsql.SslMode.Require,
+		_ => Npgsql.SslMode.Prefer
+	};
+	return new Npgsql.NpgsqlConnectionStringBuilder
+	{
+		Host = uri.Host,
+		Port = uri.Port > 0 ? uri.Port : 5432,
+		Database = uri.AbsolutePath.TrimStart('/'),
+		Username = Uri.UnescapeDataString(userInfo[0]),
+		Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : "",
+		SslMode = sslMode
+	}.ConnectionString;
+}
