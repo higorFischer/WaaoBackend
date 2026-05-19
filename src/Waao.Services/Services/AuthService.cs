@@ -1,7 +1,10 @@
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Waao.Domain.Models.Entities;
 using Waao.Infra.EF;
+using Waao.Services.Abstractions;
 using Waao.Services.Abstractions.Dtos;
 using Waao.Services.Abstractions.Services;
 using Waao.Services.Auth;
@@ -17,7 +20,12 @@ public sealed class AuthService(
 	BadgeEvaluator Badges,
 	IValidator<RegisterDto> RegisterValidator,
 	IValidator<LoginDto> LoginValidator,
-	IValidator<ChangePasswordDto> ChangePasswordValidator) : IAuthService
+	IValidator<ChangePasswordDto> ChangePasswordValidator,
+	IEmailSender EmailSender,
+	IValidator<VerifyEmailDto> VerifyEmailValidator,
+	IValidator<ResendVerificationDto> ResendValidator,
+	IConfiguration Configuration,
+	ILogger<AuthService> Logger) : IAuthService
 {
 	public async Task<AuthResultDto> LoginAsync(LoginDto dto, CancellationToken ct = default)
 	{
@@ -39,14 +47,16 @@ public sealed class AuthService(
 		return BuildResult(collaborator, streakDays, bonus, newBadges);
 	}
 
-	public async Task<AuthResultDto> RegisterAsync(RegisterDto dto, CancellationToken ct = default)
+	public async Task<RegisterResultDto> RegisterAsync(RegisterDto dto, CancellationToken ct = default)
 	{
 		await RegisterValidator.ValidateAndThrowAsync(dto, ct);
 
-		var emailExists = await Db.Collaborators.AnyAsync(c => c.Email == dto.Email, ct);
-		if (emailExists)
-			throw new ValidationException(
+		if (await Db.Collaborators.AnyAsync(c => c.Email == dto.Email, ct))
+			throw new FluentValidation.ValidationException(
 				[new FluentValidation.Results.ValidationFailure("email", "Email is already in use.")]);
+
+		var adminEmails = Configuration.GetSection("Auth:AdminEmails").Get<string[]>() ?? [];
+		var isAdmin = adminEmails.Any(e => string.Equals(e, dto.Email, StringComparison.OrdinalIgnoreCase));
 
 		var entity = new Collaborator
 		{
@@ -54,23 +64,31 @@ public sealed class AuthService(
 			FullName = dto.FullName,
 			Email = dto.Email,
 			JoinDate = dto.JoinDate,
-			DepartmentId = dto.DepartmentId,
-			RoleId = dto.RoleId,
+			RoleKind = isAdmin ? Domain.Models.Enums.CollaboratorRoleKind.Admin : Domain.Models.Enums.CollaboratorRoleKind.Collaborator,
 			PasswordHash = PasswordHasher.Hash(dto.Password),
+			EmailVerified = false,
+			EmailVerificationToken = NewToken(),
+			EmailVerificationTokenExpiresAt = DateTime.UtcNow.AddHours(24),
+			LastVerificationEmailSentAt = DateTime.UtcNow,
 		};
 		Db.Collaborators.Add(entity);
 		await Db.SaveChangesAsync(ct);
 
-		// Day-one badges (WELCOME, tenure-at-hire) + login streak start
-		var firstPass = await Badges.EvaluateAsync(entity.Id, ct);
-		var (streakDays, _, bonus) = await Streaks.RegisterLoginAsync(entity.Id, ct: ct);
-		await Db.SaveChangesAsync(ct);
-		var secondPass = await Badges.EvaluateAsync(entity.Id, ct);
-		await Db.SaveChangesAsync(ct);
+		var baseUrl = Configuration["Frontend:BaseUrl"] ?? "https://waao-frontend.higorflopes.workers.dev";
+		var verifyUrl = $"{baseUrl}/verify-email?token={entity.EmailVerificationToken}";
+		try { await EmailSender.SendVerificationAsync(entity.Email, entity.FullName, verifyUrl, ct); }
+		catch (OperationCanceledException) { throw; }
+		catch (Exception ex) { Logger.LogError(ex, "Verification email send failed for {Email}", entity.Email); }
 
-		var newBadges = firstPass.Concat(secondPass).ToList();
-		return BuildResult(entity, streakDays, bonus, newBadges);
+		return new RegisterResultDto { Status = "verification_sent", Email = entity.Email };
 	}
+
+	// Temporary stubs — real implementations delivered in C6
+	public Task<AuthResultDto> VerifyEmailAsync(VerifyEmailDto dto, CancellationToken ct = default)
+		=> throw new NotImplementedException();
+
+	public Task ResendVerificationAsync(ResendVerificationDto dto, CancellationToken ct = default)
+		=> throw new NotImplementedException();
 
 	public async Task ChangePasswordAsync(Guid collaboratorId, ChangePasswordDto dto, CancellationToken ct = default)
 	{
@@ -124,5 +142,11 @@ public sealed class AuthService(
 				XpReward = b.XpReward, UnlockRule = b.UnlockRule,
 			}).ToList(),
 		};
+	}
+
+	private static string NewToken()
+	{
+		var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+		return Convert.ToBase64String(bytes).Replace('+', '-').Replace('/', '_').TrimEnd('=');
 	}
 }
