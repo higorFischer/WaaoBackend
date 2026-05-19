@@ -116,6 +116,17 @@ builder.Services.AddCors(options =>
 		.AllowAnyHeader()
 		.AllowAnyMethod()));
 
+builder.Services.AddHttpClient("resend", c => c.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddSingleton<Waao.Services.Abstractions.Services.IEmailSender>(sp =>
+{
+	var cfg = sp.GetRequiredService<IConfiguration>();
+	var key = cfg["Resend:ApiKey"];
+	if (string.IsNullOrWhiteSpace(key))
+		return new Waao.Services.Email.LoggingEmailSender(sp.GetRequiredService<ILogger<Waao.Services.Email.LoggingEmailSender>>());
+	var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient("resend");
+	return new Waao.Services.Email.ResendEmailSender(http, sp.GetRequiredService<ILogger<Waao.Services.Email.ResendEmailSender>>(), key, cfg["Email:From"] ?? "WAAO <no-reply@waao.com.br>");
+});
+
 var app = builder.Build();
 
 // Apply migrations + seed reference data on startup.
