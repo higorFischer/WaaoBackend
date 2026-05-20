@@ -2,6 +2,8 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Waao.Services.Abstractions.Dtos;
+using Waao.Services.Abstractions.Dtos.Courses;
+using Waao.Services.Abstractions.Dtos.Challenges;
 using Waao.Services.Abstractions.Services;
 
 namespace Waao.API.Controllers;
@@ -9,7 +11,10 @@ namespace Waao.API.Controllers;
 [ApiController]
 [Route("api/waao/admin")]
 [Authorize(Policy = "Admin")]
-public class AdminController(IAdminService Service) : ControllerBase
+public class AdminController(
+	IAdminService Service,
+	ICourseCompletionService CourseCompletionService,
+	IChallengeAttemptService ChallengeAttemptService) : ControllerBase
 {
 	private Guid Me => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
 		? id : throw new UnauthorizedAccessException("Missing subject claim.");
@@ -73,6 +78,32 @@ public class AdminController(IAdminService Service) : ControllerBase
 		await Service.DeleteDepartmentAsync(id, ct);
 		return NoContent();
 	}
+
+	// ----- Course completions review -----
+	[HttpGet("course-completions/pending")]
+	[ProducesResponseType(typeof(IReadOnlyList<CourseCompletionDto>), StatusCodes.Status200OK)]
+	public async Task<IActionResult> PendingCourseCompletions(CancellationToken ct)
+		=> Ok(await CourseCompletionService.ListPendingForReviewAsync(ct));
+
+	[HttpPost("course-completions/{id:guid}/grant-xp")]
+	[ProducesResponseType(typeof(CourseCompletionDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> GrantCourseXp(Guid id, [FromBody] GrantCourseXpDto dto, CancellationToken ct)
+		=> Ok(await CourseCompletionService.GrantXpForCompletionAsync(id, dto, Me, ct));
+
+	// ----- Challenge attempts review -----
+	[HttpGet("challenge-attempts/pending")]
+	[ProducesResponseType(typeof(IReadOnlyList<ChallengeAttemptDto>), StatusCodes.Status200OK)]
+	public async Task<IActionResult> PendingChallengeAttempts(CancellationToken ct)
+		=> Ok(await ChallengeAttemptService.ListPendingForReviewAsync(ct));
+
+	[HttpPost("challenge-attempts/{id:guid}/grant-xp")]
+	[ProducesResponseType(typeof(ChallengeAttemptDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> GrantChallengeXp(Guid id, [FromBody] GrantChallengeXpDto dto, CancellationToken ct)
+		=> Ok(await ChallengeAttemptService.GrantXpForAttemptAsync(id, dto, Me, ct));
 
 	// ----- Levels -----
 	[HttpGet("levels")]
