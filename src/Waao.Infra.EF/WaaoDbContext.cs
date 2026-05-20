@@ -15,6 +15,16 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 	public DbSet<XpTransaction> XpTransactions => Set<XpTransaction>();
 	public DbSet<LevelDefinition> LevelDefinitions => Set<LevelDefinition>();
 
+	// Courses
+	public DbSet<Course> Courses => Set<Course>();
+	public DbSet<CourseCompletion> CourseCompletions => Set<CourseCompletion>();
+
+	// Challenges
+	public DbSet<Challenge> Challenges => Set<Challenge>();
+	public DbSet<ChallengeQuestion> ChallengeQuestions => Set<ChallengeQuestion>();
+	public DbSet<ChallengeAttempt> ChallengeAttempts => Set<ChallengeAttempt>();
+	public DbSet<ChallengeAttemptAnswer> ChallengeAttemptAnswers => Set<ChallengeAttemptAnswer>();
+
 	// Kanban
 	public DbSet<Board> Boards => Set<Board>();
 	public DbSet<BoardMember> BoardMembers => Set<BoardMember>();
