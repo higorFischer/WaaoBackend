@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Waao.Domain.Models.Entities;
 using Waao.Domain.Models.Entities.Kanban;
 using Waao.Domain.Models.Enums;
 using Waao.Domain.Models.Rules;
@@ -23,13 +24,21 @@ public sealed class KanbanService(
 
 	public async Task<IReadOnlyList<BoardSummaryDto>> ListBoardsAsync(Guid currentCollaboratorId, CancellationToken ct = default)
 	{
+		var collaborator = await Db.Collaborators
+			.Include(c => c.Role)
+			.FirstOrDefaultAsync(c => c.Id == currentCollaboratorId, ct);
+		var seniorityOrder = collaborator?.Role?.SeniorityOrder;
+		var isAdmin = collaborator?.RoleKind == CollaboratorRoleKind.Admin;
+
 		var boards = await Db.Boards
 			.Include(b => b.Owner)
 			.Include(b => b.Members)
 			.Where(b => !b.IsArchived && (
+				isAdmin ||
 				b.Visibility == BoardVisibility.Public ||
 				b.OwnerId == currentCollaboratorId ||
-				b.Members.Any(m => m.CollaboratorId == currentCollaboratorId)))
+				b.Members.Any(m => m.CollaboratorId == currentCollaboratorId) ||
+				(b.MinSeniorityOrder != null && seniorityOrder != null && seniorityOrder >= b.MinSeniorityOrder)))
 			.OrderBy(b => b.Title)
 			.ToListAsync(ct);
 
@@ -42,7 +51,8 @@ public sealed class KanbanService(
 		return boards.Select(b => new BoardSummaryDto
 		{
 			Id = b.Id, Slug = b.Slug, Title = b.Title, Description = b.Description, ColorHex = b.ColorHex,
-			Visibility = b.Visibility, OwnerId = b.OwnerId, OwnerName = b.Owner?.FullName,
+			Visibility = b.Visibility, MinSeniorityOrder = b.MinSeniorityOrder,
+			OwnerId = b.OwnerId, OwnerName = b.Owner?.FullName,
 			CardCount = counts.GetValueOrDefault(b.Id, 0),
 			MemberCount = b.Members.Count,
 			IsArchived = b.IsArchived,
@@ -58,7 +68,8 @@ public sealed class KanbanService(
 			.Include(b => b.Labels)
 			.FirstOrDefaultAsync(b => b.Slug == slug, ct);
 		if (board is null) return null;
-		await EnsureCanViewAsync(board, currentCollaboratorId, ct);
+		var collaborator = await Db.Collaborators.Include(c => c.Role).FirstOrDefaultAsync(c => c.Id == currentCollaboratorId, ct);
+		await EnsureCanViewAsync(board, currentCollaboratorId, collaborator?.Role?.SeniorityOrder, collaborator?.RoleKind == CollaboratorRoleKind.Admin, ct);
 
 		var cards = await Db.Cards
 			.Include(c => c.Assignee)
@@ -78,8 +89,8 @@ public sealed class KanbanService(
 		return new BoardDetailDto
 		{
 			Id = board.Id, Slug = board.Slug, Title = board.Title, Description = board.Description,
-			ColorHex = board.ColorHex, Visibility = board.Visibility, OwnerId = board.OwnerId,
-			IsArchived = board.IsArchived,
+			ColorHex = board.ColorHex, Visibility = board.Visibility, MinSeniorityOrder = board.MinSeniorityOrder,
+			OwnerId = board.OwnerId, IsArchived = board.IsArchived,
 			Members = board.Members.Select(m => new BoardMemberDto
 			{
 				Id = m.Id, CollaboratorId = m.CollaboratorId, FullName = m.Collaborator.FullName,
@@ -111,7 +122,8 @@ public sealed class KanbanService(
 		{
 			Id = Guid.CreateVersion7(),
 			Slug = dto.Slug, Title = dto.Title, Description = dto.Description,
-			ColorHex = dto.ColorHex, Visibility = dto.Visibility, OwnerId = currentCollaboratorId,
+			ColorHex = dto.ColorHex, Visibility = dto.Visibility, MinSeniorityOrder = dto.MinSeniorityOrder,
+			OwnerId = currentCollaboratorId,
 		};
 		Db.Boards.Add(board);
 		Db.BoardMembers.Add(new BoardMember
@@ -137,32 +149,35 @@ public sealed class KanbanService(
 		return new BoardSummaryDto
 		{
 			Id = board.Id, Slug = board.Slug, Title = board.Title, Description = board.Description,
-			ColorHex = board.ColorHex, Visibility = board.Visibility, OwnerId = board.OwnerId,
-			CardCount = 0, MemberCount = 1, IsArchived = false,
+			ColorHex = board.ColorHex, Visibility = board.Visibility, MinSeniorityOrder = board.MinSeniorityOrder,
+			OwnerId = board.OwnerId, CardCount = 0, MemberCount = 1, IsArchived = false,
 		};
 	}
 
 	public async Task<BoardSummaryDto> UpdateBoardAsync(Guid boardId, UpdateBoardDto dto, Guid currentCollaboratorId, CancellationToken ct = default)
 	{
-		var board = await LoadBoardWriteAsync(boardId, currentCollaboratorId, BoardMemberRole.Editor, ct);
+		var isAdmin = await IsAdminAsync(currentCollaboratorId, ct);
+		var board = await LoadBoardWriteAsync(boardId, currentCollaboratorId, BoardMemberRole.Editor, isAdmin, ct);
 		board.Title = dto.Title;
 		board.Description = dto.Description;
 		board.ColorHex = dto.ColorHex;
 		board.Visibility = dto.Visibility;
+		board.MinSeniorityOrder = dto.MinSeniorityOrder;
 		board.IsArchived = dto.IsArchived;
 		board.UpdatedAt = DateTime.UtcNow;
 		await Db.SaveChangesAsync(ct);
 		return new BoardSummaryDto
 		{
 			Id = board.Id, Slug = board.Slug, Title = board.Title, Description = board.Description,
-			ColorHex = board.ColorHex, Visibility = board.Visibility, OwnerId = board.OwnerId,
-			IsArchived = board.IsArchived,
+			ColorHex = board.ColorHex, Visibility = board.Visibility, MinSeniorityOrder = board.MinSeniorityOrder,
+			OwnerId = board.OwnerId, IsArchived = board.IsArchived,
 		};
 	}
 
 	public async Task DeleteBoardAsync(Guid boardId, Guid currentCollaboratorId, CancellationToken ct = default)
 	{
-		var board = await LoadBoardWriteAsync(boardId, currentCollaboratorId, BoardMemberRole.Owner, ct);
+		var isAdmin = await IsAdminAsync(currentCollaboratorId, ct);
+		var board = await LoadBoardWriteAsync(boardId, currentCollaboratorId, BoardMemberRole.Owner, isAdmin, ct);
 		board.IsDeleted = true;
 		board.DeletedAt = DateTime.UtcNow;
 		await Db.SaveChangesAsync(ct);
@@ -170,7 +185,8 @@ public sealed class KanbanService(
 
 	public async Task AddMemberAsync(Guid boardId, AddBoardMemberDto dto, Guid currentCollaboratorId, CancellationToken ct = default)
 	{
-		var board = await LoadBoardWriteAsync(boardId, currentCollaboratorId, BoardMemberRole.Owner, ct);
+		var isAdmin = await IsAdminAsync(currentCollaboratorId, ct);
+		var board = await LoadBoardWriteAsync(boardId, currentCollaboratorId, BoardMemberRole.Owner, isAdmin, ct);
 		var existing = await Db.BoardMembers.FirstOrDefaultAsync(m => m.BoardId == board.Id && m.CollaboratorId == dto.CollaboratorId, ct);
 		if (existing is not null)
 		{
@@ -188,7 +204,8 @@ public sealed class KanbanService(
 
 	public async Task RemoveMemberAsync(Guid boardId, Guid memberId, Guid currentCollaboratorId, CancellationToken ct = default)
 	{
-		await LoadBoardWriteAsync(boardId, currentCollaboratorId, BoardMemberRole.Owner, ct);
+		var isAdmin = await IsAdminAsync(currentCollaboratorId, ct);
+		await LoadBoardWriteAsync(boardId, currentCollaboratorId, BoardMemberRole.Owner, isAdmin, ct);
 		var member = await Db.BoardMembers.FirstOrDefaultAsync(m => m.Id == memberId && m.BoardId == boardId, ct)
 			?? throw new KeyNotFoundException("Member not found.");
 		member.IsDeleted = true;
@@ -202,7 +219,7 @@ public sealed class KanbanService(
 
 	public async Task<BoardColumnDto> CreateColumnAsync(Guid boardId, CreateColumnDto dto, Guid currentCollaboratorId, CancellationToken ct = default)
 	{
-		await LoadBoardWriteAsync(boardId, currentCollaboratorId, BoardMemberRole.Editor, ct);
+		await LoadBoardWriteAsync(boardId, currentCollaboratorId, BoardMemberRole.Editor, await IsAdminAsync(currentCollaboratorId, ct), ct);
 		var existing = await Db.BoardColumns.Where(c => c.BoardId == boardId).OrderBy(c => c.Rank).ToListAsync(ct);
 		var rank = ComputeRankAfter(existing.Select(c => c.Rank), dto.AfterColumnId is null ? null : existing.Find(c => c.Id == dto.AfterColumnId)?.Rank);
 
@@ -224,7 +241,7 @@ public sealed class KanbanService(
 	{
 		var column = await Db.BoardColumns.Include(c => c.Board).FirstOrDefaultAsync(c => c.Id == columnId, ct)
 			?? throw new KeyNotFoundException($"Column {columnId} not found.");
-		await EnsureCanWriteAsync(column.Board, currentCollaboratorId, BoardMemberRole.Editor, ct);
+		await EnsureCanWriteAsync(column.Board, currentCollaboratorId, BoardMemberRole.Editor, await IsAdminAsync(currentCollaboratorId, ct), ct);
 		column.Title = dto.Title;
 		column.ColorHex = dto.ColorHex;
 		column.WipLimit = dto.WipLimit;
@@ -242,7 +259,7 @@ public sealed class KanbanService(
 	{
 		var column = await Db.BoardColumns.Include(c => c.Board).FirstOrDefaultAsync(c => c.Id == columnId, ct)
 			?? throw new KeyNotFoundException($"Column {columnId} not found.");
-		await EnsureCanWriteAsync(column.Board, currentCollaboratorId, BoardMemberRole.Editor, ct);
+		await EnsureCanWriteAsync(column.Board, currentCollaboratorId, BoardMemberRole.Editor, await IsAdminAsync(currentCollaboratorId, ct), ct);
 		column.IsDeleted = true;
 		column.DeletedAt = DateTime.UtcNow;
 		await Db.SaveChangesAsync(ct);
@@ -250,7 +267,7 @@ public sealed class KanbanService(
 
 	public async Task<EpicDto> CreateEpicAsync(Guid boardId, CreateEpicDto dto, Guid currentCollaboratorId, CancellationToken ct = default)
 	{
-		await LoadBoardWriteAsync(boardId, currentCollaboratorId, BoardMemberRole.Editor, ct);
+		await LoadBoardWriteAsync(boardId, currentCollaboratorId, BoardMemberRole.Editor, await IsAdminAsync(currentCollaboratorId, ct), ct);
 		var maxRank = await Db.Epics.Where(e => e.BoardId == boardId).Select(e => (decimal?)e.Rank).MaxAsync(ct) ?? 0m;
 		var epic = new Epic
 		{
@@ -264,7 +281,7 @@ public sealed class KanbanService(
 
 	public async Task<CardLabelDto> CreateLabelAsync(Guid boardId, CreateLabelDto dto, Guid currentCollaboratorId, CancellationToken ct = default)
 	{
-		await LoadBoardWriteAsync(boardId, currentCollaboratorId, BoardMemberRole.Editor, ct);
+		await LoadBoardWriteAsync(boardId, currentCollaboratorId, BoardMemberRole.Editor, await IsAdminAsync(currentCollaboratorId, ct), ct);
 		var label = new CardLabel { Id = Guid.CreateVersion7(), BoardId = boardId, Name = dto.Name, ColorHex = dto.ColorHex };
 		Db.CardLabels.Add(label);
 		await Db.SaveChangesAsync(ct);
@@ -279,7 +296,7 @@ public sealed class KanbanService(
 	{
 		var column = await Db.BoardColumns.Include(c => c.Board).FirstOrDefaultAsync(c => c.Id == dto.ColumnId, ct)
 			?? throw new KeyNotFoundException($"Column {dto.ColumnId} not found.");
-		await EnsureCanWriteAsync(column.Board, currentCollaboratorId, BoardMemberRole.Editor, ct);
+		await EnsureCanWriteAsync(column.Board, currentCollaboratorId, BoardMemberRole.Editor, await IsAdminAsync(currentCollaboratorId, ct), ct);
 
 		var maxRank = await Db.Cards.Where(c => c.ColumnId == column.Id && !c.IsArchived).Select(c => (decimal?)c.Rank).MaxAsync(ct) ?? 0m;
 		var card = new Card
@@ -577,7 +594,7 @@ public sealed class KanbanService(
 	{
 		var checklist = await Db.CardChecklists.Include(c => c.Card).FirstOrDefaultAsync(c => c.Id == checklistId, ct)
 			?? throw new KeyNotFoundException("Checklist not found.");
-		await EnsureCanWriteAsync(await Db.Boards.FirstAsync(b => b.Id == checklist.Card.BoardId, ct), currentCollaboratorId, BoardMemberRole.Editor, ct);
+		await EnsureCanWriteAsync(await Db.Boards.FirstAsync(b => b.Id == checklist.Card.BoardId, ct), currentCollaboratorId, BoardMemberRole.Editor, await IsAdminAsync(currentCollaboratorId, ct), ct);
 		var maxRank = await Db.CardChecklistItems.Where(i => i.ChecklistId == checklist.Id).Select(i => (decimal?)i.Rank).MaxAsync(ct) ?? 0m;
 		var item = new CardChecklistItem
 		{
@@ -592,7 +609,7 @@ public sealed class KanbanService(
 	{
 		var item = await Db.CardChecklistItems.Include(i => i.Checklist).ThenInclude(c => c.Card).FirstOrDefaultAsync(i => i.Id == itemId, ct)
 			?? throw new KeyNotFoundException("Checklist item not found.");
-		await EnsureCanWriteAsync(await Db.Boards.FirstAsync(b => b.Id == item.Checklist.Card.BoardId, ct), currentCollaboratorId, BoardMemberRole.Editor, ct);
+		await EnsureCanWriteAsync(await Db.Boards.FirstAsync(b => b.Id == item.Checklist.Card.BoardId, ct), currentCollaboratorId, BoardMemberRole.Editor, await IsAdminAsync(currentCollaboratorId, ct), ct);
 		item.Text = dto.Text;
 		item.Done = dto.Done;
 		item.UpdatedAt = DateTime.UtcNow;
@@ -618,7 +635,8 @@ public sealed class KanbanService(
 			.Include(c => c.Activities).ThenInclude(a => a.Actor)
 			.FirstOrDefaultAsync(c => c.Id == cardId, ct);
 		if (card is null) return null;
-		await EnsureCanViewAsync(card.Board, currentCollaboratorId, ct);
+		var collaborator = await Db.Collaborators.Include(c => c.Role).FirstOrDefaultAsync(c => c.Id == currentCollaboratorId, ct);
+		await EnsureCanViewAsync(card.Board, currentCollaboratorId, collaborator?.Role?.SeniorityOrder, collaborator?.RoleKind == CollaboratorRoleKind.Admin, ct);
 		return card;
 	}
 
@@ -626,33 +644,45 @@ public sealed class KanbanService(
 	{
 		var card = await Db.Cards.Include(c => c.Board).ThenInclude(b => b.Members).FirstOrDefaultAsync(c => c.Id == cardId, ct)
 			?? throw new KeyNotFoundException($"Card {cardId} not found.");
-		await EnsureCanWriteAsync(card.Board, currentCollaboratorId, min, ct);
+		await EnsureCanWriteAsync(card.Board, currentCollaboratorId, min, await IsAdminAsync(currentCollaboratorId, ct), ct);
 		return card;
 	}
 
-	private async Task<Board> LoadBoardWriteAsync(Guid boardId, Guid currentCollaboratorId, BoardMemberRole min, CancellationToken ct)
+	private async Task<Board> LoadBoardWriteAsync(Guid boardId, Guid currentCollaboratorId, BoardMemberRole min, bool isAdmin, CancellationToken ct)
 	{
 		var board = await Db.Boards.Include(b => b.Members).FirstOrDefaultAsync(b => b.Id == boardId, ct)
 			?? throw new KeyNotFoundException($"Board {boardId} not found.");
-		await EnsureCanWriteAsync(board, currentCollaboratorId, min, ct);
+		await EnsureCanWriteAsync(board, currentCollaboratorId, min, isAdmin, ct);
 		return board;
 	}
 
-	private Task EnsureCanViewAsync(Board board, Guid currentCollaboratorId, CancellationToken _)
+	private Task EnsureCanViewAsync(Board board, Guid currentCollaboratorId, int? seniorityOrder, bool isAdmin, CancellationToken _)
 	{
+		if (isAdmin) return Task.CompletedTask;
 		if (board.Visibility == BoardVisibility.Public) return Task.CompletedTask;
 		if (board.OwnerId == currentCollaboratorId) return Task.CompletedTask;
 		if (board.Members.Any(m => m.CollaboratorId == currentCollaboratorId)) return Task.CompletedTask;
+		if (board.MinSeniorityOrder.HasValue && seniorityOrder.HasValue && seniorityOrder.Value >= board.MinSeniorityOrder.Value) return Task.CompletedTask;
 		throw new UnauthorizedAccessException("You do not have access to this board.");
 	}
 
-	private Task EnsureCanWriteAsync(Board board, Guid currentCollaboratorId, BoardMemberRole min, CancellationToken _)
+	private Task EnsureCanWriteAsync(Board board, Guid currentCollaboratorId, BoardMemberRole min, bool isAdmin, CancellationToken _)
 	{
+		if (isAdmin) return Task.CompletedTask;
 		if (board.OwnerId == currentCollaboratorId) return Task.CompletedTask;
 		var membership = board.Members.FirstOrDefault(m => m.CollaboratorId == currentCollaboratorId);
 		if (membership is null || (int)membership.Role < (int)min)
 			throw new UnauthorizedAccessException("You do not have permission to perform this action on this board.");
 		return Task.CompletedTask;
+	}
+
+	private async Task<bool> IsAdminAsync(Guid collaboratorId, CancellationToken ct)
+	{
+		var roleKind = await Db.Collaborators
+			.Where(c => c.Id == collaboratorId)
+			.Select(c => (CollaboratorRoleKind?)c.RoleKind)
+			.FirstOrDefaultAsync(ct);
+		return roleKind == CollaboratorRoleKind.Admin;
 	}
 
 	private static decimal ComputeRankAfter(IEnumerable<decimal> existing, decimal? after)

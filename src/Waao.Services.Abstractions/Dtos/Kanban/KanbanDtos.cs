@@ -10,6 +10,7 @@ public record BoardSummaryDto
 	public string? Description { get; init; }
 	public string ColorHex { get; init; } = "#2A6B7E";
 	public BoardVisibility Visibility { get; init; }
+	public int? MinSeniorityOrder { get; init; }
 	public Guid OwnerId { get; init; }
 	public string? OwnerName { get; init; }
 	public int CardCount { get; init; }
@@ -25,6 +26,7 @@ public record BoardDetailDto
 	public string? Description { get; init; }
 	public string ColorHex { get; init; } = "#2A6B7E";
 	public BoardVisibility Visibility { get; init; }
+	public int? MinSeniorityOrder { get; init; }
 	public Guid OwnerId { get; init; }
 	public bool IsArchived { get; init; }
 
@@ -152,6 +154,7 @@ public record CreateBoardDto
 	public string? Description { get; init; }
 	public string ColorHex { get; init; } = "#2A6B7E";
 	public BoardVisibility Visibility { get; init; } = BoardVisibility.Team;
+	public int? MinSeniorityOrder { get; init; }
 	public bool SeedDefaultColumns { get; init; } = true;
 }
 
@@ -161,6 +164,7 @@ public record UpdateBoardDto
 	public string? Description { get; init; }
 	public string ColorHex { get; init; } = "#2A6B7E";
 	public BoardVisibility Visibility { get; init; }
+	public int? MinSeniorityOrder { get; init; }
 	public bool IsArchived { get; init; }
 }
 

@@ -11,6 +11,12 @@ public class Board : Entity
 
 	public BoardVisibility Visibility { get; set; } = BoardVisibility.Team;
 
+	/// <summary>
+	/// When set, the board is also visible to any collaborator whose Role.SeniorityOrder >= this value,
+	/// in addition to explicit members and owner. Null means no role-level gate (explicit-members-only when Team).
+	/// </summary>
+	public int? MinSeniorityOrder { get; set; }
+
 	public Guid OwnerId { get; set; }
 	public virtual Collaborator Owner { get; set; } = null!;
 
