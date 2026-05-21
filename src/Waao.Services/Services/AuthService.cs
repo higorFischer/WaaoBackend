@@ -54,18 +54,20 @@ public sealed class AuthService(
 	{
 		await RegisterValidator.ValidateAndThrowAsync(dto, ct);
 
-		if (await Db.Collaborators.AnyAsync(c => c.Email == dto.Email, ct))
+		var emailLower = dto.Email.Trim().ToLowerInvariant();
+
+		if (await Db.Collaborators.AnyAsync(c => c.Email == emailLower, ct))
 			throw new FluentValidation.ValidationException(
 				[new FluentValidation.Results.ValidationFailure("email", "Email is already in use.")]);
 
 		var adminEmails = Configuration.GetSection("Auth:AdminEmails").Get<string[]>() ?? [];
-		var isAdmin = adminEmails.Any(e => string.Equals(e, dto.Email, StringComparison.OrdinalIgnoreCase));
+		var isAdmin = adminEmails.Any(e => string.Equals(e, emailLower, StringComparison.OrdinalIgnoreCase));
 
 		var entity = new Collaborator
 		{
 			Id = Guid.CreateVersion7(),
 			FullName = dto.FullName,
-			Email = dto.Email,
+			Email = emailLower,
 			JoinDate = dto.JoinDate,
 			RoleKind = isAdmin ? Domain.Models.Enums.CollaboratorRoleKind.Admin : Domain.Models.Enums.CollaboratorRoleKind.Collaborator,
 			PasswordHash = PasswordHasher.Hash(dto.Password),
@@ -114,7 +116,8 @@ public sealed class AuthService(
 	{
 		await ResendValidator.ValidateAndThrowAsync(dto, ct);
 
-		var c = await Db.Collaborators.FirstOrDefaultAsync(x => x.Email == dto.Email, ct);
+		var emailLower = dto.Email.Trim().ToLowerInvariant();
+		var c = await Db.Collaborators.FirstOrDefaultAsync(x => x.Email == emailLower, ct);
 		if (c is null || c.EmailVerified) return;
 		if (c.LastVerificationEmailSentAt is not null && (DateTime.UtcNow - c.LastVerificationEmailSentAt.Value).TotalSeconds < 60)
 			return;
@@ -156,11 +159,14 @@ public sealed class AuthService(
 		return c is null ? null : CollaboratorMapper.ToDto(c);
 	}
 
-	private async Task<Collaborator?> LoadByEmail(string email, CancellationToken ct) =>
-		await Db.Collaborators
+	private async Task<Collaborator?> LoadByEmail(string email, CancellationToken ct)
+	{
+		var emailLower = email.Trim().ToLowerInvariant();
+		return await Db.Collaborators
 			.Include(c => c.Department).Include(c => c.Role)
 			.Include(c => c.Manager).Include(c => c.Badges)
-			.FirstOrDefaultAsync(c => c.Email == email, ct);
+			.FirstOrDefaultAsync(c => c.Email == emailLower, ct);
+	}
 
 	private AuthResultDto BuildResult(
 		Collaborator entity,
