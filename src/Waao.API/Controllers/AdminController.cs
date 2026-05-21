@@ -67,6 +67,7 @@ public class AdminController(
 		=> Ok(await Service.PromoteAsync(id, dto, Me, ct));
 
 	[HttpPost("collaborators/{id:guid}/grant-xp")]
+	[Authorize(Policy = "HR")]  // HR can grant too; service enforces "higher rank than recipient"
 	[ProducesResponseType(typeof(CollaboratorDto), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -134,6 +135,7 @@ public class AdminController(
 		=> Ok(await CourseCompletionService.ListPendingForReviewAsync(ct));
 
 	[HttpPost("course-completions/{id:guid}/grant-xp")]
+	[Authorize(Policy = "HR")]  // HR can grant; service enforces "higher rank than recipient"
 	[ProducesResponseType(typeof(CourseCompletionDto), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -147,6 +149,7 @@ public class AdminController(
 		=> Ok(await ChallengeAttemptService.ListPendingForReviewAsync(ct));
 
 	[HttpPost("challenge-attempts/{id:guid}/grant-xp")]
+	[Authorize(Policy = "HR")]  // HR can grant; service enforces "higher rank than recipient"
 	[ProducesResponseType(typeof(ChallengeAttemptDto), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]

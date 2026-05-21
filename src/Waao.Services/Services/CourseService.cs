@@ -5,6 +5,7 @@ using Waao.Domain.Models.Enums;
 using Waao.Infra.EF;
 using Waao.Services.Abstractions.Dtos.Courses;
 using Waao.Services.Abstractions.Services;
+using Waao.Services.Authorization;
 using Waao.Services.Gamification;
 
 namespace Waao.Services.Services;
@@ -199,6 +200,9 @@ public sealed class CourseCompletionService(
 		// Idempotent: return current if already granted
 		if (completion.XpAwardedAt is not null)
 			return MapCompletionDto(completion);
+
+		// Higher-rank-only rule: the reviewer must outrank the recipient.
+		await RankGuard.EnsureCanGrantXpToAsync(Db, adminId, completion.CollaboratorId, ct);
 
 		await Gamification.RecordAsync(
 			completion.CollaboratorId,

@@ -5,6 +5,7 @@ using Waao.Domain.Models.Enums;
 using Waao.Infra.EF;
 using Waao.Services.Abstractions.Dtos.Challenges;
 using Waao.Services.Abstractions.Services;
+using Waao.Services.Authorization;
 using Waao.Services.Gamification;
 
 namespace Waao.Services.Services;
@@ -336,6 +337,9 @@ public sealed class ChallengeAttemptService(
 
 		if (attempt.XpAwardedAt is not null)
 			return MapAttemptDto(attempt);
+
+		// Higher-rank-only rule: the reviewer must outrank the recipient.
+		await RankGuard.EnsureCanGrantXpToAsync(Db, adminId, attempt.CollaboratorId, ct);
 
 		await Gamification.RecordAsync(
 			attempt.CollaboratorId,

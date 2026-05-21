@@ -7,6 +7,7 @@ using Waao.Infra.EF;
 using Waao.Services.Abstractions.Dtos;
 using Waao.Services.Abstractions.Services;
 using Waao.Services.Auth;
+using Waao.Services.Authorization;
 using Waao.Services.Gamification;
 using Waao.Services.Mappers;
 
@@ -317,6 +318,9 @@ public sealed class AdminService(
 
 		var c = await Db.Collaborators.FirstOrDefaultAsync(x => x.Id == collaboratorId, ct)
 			?? throw new KeyNotFoundException($"Collaborator {collaboratorId} not found.");
+
+		// Higher-rank-only rule: the actor must outrank the recipient.
+		await RankGuard.EnsureCanGrantXpToAsync(Db, adminId, collaboratorId, ct);
 
 		await Gamification.RecordAsync(
 			collaboratorId, dto.Amount, XpSource.Admin, dto.Reason,
