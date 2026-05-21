@@ -441,28 +441,10 @@ public sealed class KanbanService(
 		{
 			card.CompletedAt = DateTime.UtcNow;
 			completed = true;
-			var beneficiary = card.AssigneeId ?? card.ReporterId;
-			xpAwarded = XpRules.XpForCardCompleted(card.Priority, card.StoryPoints);
-			if (xpAwarded > 0)
-			{
-				await Gamification.RecordAsync(
-					beneficiary, xpAwarded, XpSource.KanbanCard,
-					$"Card completed: {card.Title}", card.Id, nameof(Card), ct);
-			}
-
-			// Check if epic just completed (all non-archived cards in it are done)
-			if (card.EpicId.HasValue)
-			{
-				var remaining = await Db.Cards.AnyAsync(c => c.EpicId == card.EpicId && c.Id != card.Id && !c.IsArchived && !c.CompletedAt.HasValue, ct);
-				if (!remaining)
-				{
-					var epic = await Db.Epics.FirstAsync(e => e.Id == card.EpicId.Value, ct);
-					await Gamification.RecordAsync(
-						beneficiary, XpRules.XpForEpicCompleted, XpSource.KanbanCard,
-						$"Epic completed: {epic.Title}", epic.Id, nameof(Epic), ct);
-					xpAwarded += XpRules.XpForEpicCompleted;
-				}
-			}
+			// XP for card / epic completion intentionally NOT auto-awarded.
+			// Per the admin-only XP economy (Feature B), XP grants come from
+			// the admin XP-grant flow only. Revisit when a reviewed/approved
+			// rewards model for kanban work is designed.
 		}
 		else if (leavingDoneColumn)
 		{
