@@ -17,6 +17,7 @@ public static class DbInitializer
 
 		// Courses and Challenges depend on the admin user existing.
 		await SeedDefaultCoursesAsync(db, ct);
+		await SeedGitCoursesAsync(db, ct);
 		await SeedDefaultChallengesAsync(db, ct);
 	}
 
@@ -255,6 +256,126 @@ public static class DbInitializer
 		];
 
 		foreach (var (title, desc, cat, provider, duration, xp) in courses)
+		{
+			db.Courses.Add(new Course
+			{
+				Id = Guid.CreateVersion7(),
+				Title = title,
+				Description = desc,
+				Category = cat,
+				Provider = provider,
+				DurationMinutes = duration,
+				SuggestedXp = xp,
+				IsPublished = true,
+				CreatedById = author.Id,
+			});
+		}
+
+		await db.SaveChangesAsync(ct);
+	}
+
+	// ---------- Git curriculum (20 published courses, basic -> advanced, all under DevOps axis) ----------
+	private static async Task SeedGitCoursesAsync(WaaoDbContext db, CancellationToken ct)
+	{
+		// Sentinel: only seed if no Git curriculum course exists yet.
+		if (await db.Courses.AnyAsync(c => c.Title.StartsWith("Git 101"), ct)) return;
+
+		var author = await db.Collaborators.FirstOrDefaultAsync(c => c.Email == "higor@waao.com.br", ct);
+		if (author is null) return;
+
+		// Category contains "devops" so the SkillRadar matcher routes XP to the DevOps axis.
+		const string cat = "DevOps · Git";
+		const string provider = "WAAO Learning";
+
+		(string Title, string Description, int Duration, int SuggestedXp)[] courses =
+		[
+			// ---- Basics ----
+			("Git 101: What is Version Control?",
+				"Why version control exists, how Git differs from older centralized systems (CVS, SVN), the snapshot model, and the three states (working tree, index, repo). No commands yet — just the mental model.",
+				40, 60),
+			("Git 101: First-Time Setup",
+				"Install Git, configure user.name and user.email per machine, choose a default branch name, set up your preferred editor and pager, and enable color output. Includes WAAO conventions (always commit as higor@waao.com.br).",
+				30, 60),
+			("Git 101: init, add, commit",
+				"Create your first repository, stage files with git add, write your first commit, and inspect history with git log. Learn the difference between staging and committing.",
+				45, 80),
+			("Git 101: status, log, diff",
+				"The three daily-driver verbs. Read git status output like a pro, navigate history with git log (--oneline, --graph, --stat), and compare working tree vs index vs HEAD with git diff.",
+				50, 100),
+			("Git 101: Remotes, clone, fetch, pull, push",
+				"How distributed repositories actually work. Clone an existing repo, add a remote, fetch updates, pull (= fetch + merge), and push your changes back. Demystifies origin/main vs main.",
+				60, 100),
+			(".gitignore Essentials",
+				"Pattern syntax (globs, negations, directories), where to put .gitignore (repo vs global ~/.gitignore_global), common WAAO patterns (.env, bin/, obj/, node_modules/), and how to untrack files already committed by mistake.",
+				35, 70),
+
+			// ---- Branching ----
+			("Branches: create, switch, merge",
+				"Why feature branches matter, creating branches with git switch -c, listing with git branch, deleting with -d / -D, and merging branches back into main. Includes the fast-forward vs no-ff distinction.",
+				60, 120),
+			("Merge vs Rebase: The Mental Model",
+				"When to merge and when to rebase. The golden rule (don't rebase shared branches), pros/cons of each, what git log --graph looks like with each strategy, and how to choose for WAAO's trunk-based workflow.",
+				70, 150),
+			("Resolving Merge Conflicts",
+				"What conflicts actually look like in files (<<<<<<, ======, >>>>>>), strategies to resolve (manual, --ours, --theirs), conflict markers in binaries (LFS), and using a proper merge tool (VS Code, Rider, vimdiff).",
+				60, 120),
+			("Pull Request Workflow",
+				"Feature branch → push → open PR → code review → merge. Branch naming conventions (feat/, fix/), GitHub PR templates, draft PRs, requesting reviewers, and clean merge strategies (merge commit vs squash vs rebase-merge).",
+				55, 110),
+
+			// ---- Intermediate ----
+			("Stash & WIP Workflows",
+				"Save uncommitted work with git stash, list/apply/pop/drop stashes, stash with --include-untracked, stash named subsets with --keep-index, and recover lost stashes from the reflog.",
+				50, 100),
+			("Tags & Releases",
+				"Lightweight vs annotated tags, semantic versioning (vMAJOR.MINOR.PATCH), pushing tags with git push --tags, deleting tags locally and remotely, and wiring tag pushes to a release pipeline in CI/CD.",
+				45, 90),
+			("Remote Tracking & Upstream",
+				"git branch -vv to see tracking info, set upstream with push -u, switching to a remote branch with fetch + switch, pruning stale remote refs with fetch --prune.",
+				40, 80),
+			("Diffing Like a Pro",
+				"Beyond git diff: log -p, log --stat, blame (line-by-line authorship), show (inspect a commit), word-diff for prose, and using git range-diff to compare two patch series.",
+				55, 110),
+			(".gitattributes, EOL & LFS",
+				"Line-ending normalization (text=auto, eol=lf), language hints for diff (driver=csharp), filters, and Git LFS for binary assets. Avoiding the CRLF/LF nightmare across macOS, Linux, and Windows.",
+				50, 100),
+
+			// ---- Advanced ----
+			("Interactive Rebase: Squash, Fixup, Reword, Drop",
+				"git rebase -i HEAD~N for cleaning up a feature branch before merge. Reorder commits, squash WIP fixups, reword messages, drop accidental commits. Includes autosquash (--autosquash + fixup!).",
+				75, 180),
+			("Cherry-pick, Patch, and Apply",
+				"Move a single commit between branches with cherry-pick, generate portable patches with format-patch, apply with apply or am, and resolve cherry-pick conflicts cleanly.",
+				60, 140),
+			("Reflog: Recovery & Time Travel",
+				"git reflog is your undo log for everything: lost commits, deleted branches, botched rebases. Recover from --hard reset, find detached HEADs, and understand reflog expiration.",
+				55, 130),
+			("Bisect: Finding the Bad Commit",
+				"Binary-search a regression with git bisect start/good/bad. Automate with bisect run + a test script. Real example: tracking down which commit broke a WAAO API endpoint.",
+				60, 150),
+
+			// ---- Expert ----
+			("Worktrees & Parallel Branches",
+				"Multiple working copies of one repo with git worktree add. When to use vs separate clones, integrating with editors, and the .worktrees/ convention used by WAAO tooling.",
+				50, 130),
+			("Submodules vs Subtrees vs Monorepo",
+				"Three ways to share code across repos. When submodules make sense (independent versioning), when subtrees are simpler (vendored deps), and when a monorepo wins. Practical migration patterns.",
+				70, 180),
+			("Custom Hooks: pre-commit, pre-push, commit-msg",
+				"Local hooks under .git/hooks, sharing hooks via Husky or pre-commit framework, common checks (lint, format, secrets, test). The WAAO pre-commit setup.",
+				55, 130),
+			("Signed Commits with GPG / SSH",
+				"Configure commit signing (gpg.format=ssh + user.signingkey), --gpg-sign automatic signing, GitHub verified badge, and rotating keys. Why signed commits matter for supply-chain trust.",
+				50, 120),
+			("Git Internals: Objects, Refs, Packfiles",
+				"What .git/ actually contains: blobs, trees, commits, tags. SHA addressing, the object database, refs, the index, and packfiles. Read porcelain through plumbing (cat-file, hash-object, ls-tree).",
+				80, 220),
+			("Rewriting History with git-filter-repo",
+				"Remove secrets from history (the safer replacement for filter-branch), split out a directory into its own repo, mass-rewrite author emails, and force-push consequences. Always work on a fresh clone.",
+				70, 200),
+		];
+
+		foreach (var (title, desc, duration, xp) in courses)
 		{
 			db.Courses.Add(new Course
 			{
