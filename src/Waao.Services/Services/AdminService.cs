@@ -1,10 +1,12 @@
 using FluentValidation;
+using FluentValidation.Results;
 using Microsoft.EntityFrameworkCore;
 using Waao.Domain.Models.Entities;
 using Waao.Domain.Models.Enums;
 using Waao.Infra.EF;
 using Waao.Services.Abstractions.Dtos;
 using Waao.Services.Abstractions.Services;
+using Waao.Services.Auth;
 using Waao.Services.Gamification;
 using Waao.Services.Mappers;
 
@@ -15,7 +17,8 @@ public sealed class AdminService(
 	StreakTracker Streaks,
 	BadgeEvaluator Badges,
 	GamificationEngine Gamification,
-	IValidator<GrantXpDto> GrantXpValidator) : IAdminService
+	IValidator<GrantXpDto> GrantXpValidator,
+	IValidator<AdminCreateUserDto> CreateUserValidator) : IAdminService
 {
 	// =====================================================================
 	// PEOPLE
@@ -298,6 +301,52 @@ public sealed class AdminService(
 			.Include(x => x.Department).Include(x => x.Role)
 			.Include(x => x.Manager).Include(x => x.Badges)
 			.FirstAsync(x => x.Id == collaboratorId, ct);
+		return CollaboratorMapper.ToDto(full);
+	}
+
+	// =====================================================================
+	// USER CREATION (admin can create a pre-activated collaborator with password)
+	// =====================================================================
+
+	public async Task<CollaboratorDto> CreateUserAsync(AdminCreateUserDto dto, Guid actorId, CancellationToken ct = default)
+	{
+		await CreateUserValidator.ValidateAndThrowAsync(dto, ct);
+
+		var emailLower = dto.Email.Trim().ToLowerInvariant();
+		if (await Db.Collaborators.AnyAsync(c => c.Email == emailLower, ct))
+		{
+			throw new ValidationException("Email already in use.",
+				[new ValidationFailure(nameof(dto.Email), "Email is already in use.")]);
+		}
+
+		if (dto.DepartmentId is not null && !await Db.Departments.AnyAsync(d => d.Id == dto.DepartmentId, ct))
+		{
+			throw new ValidationException("Department not found.",
+				[new ValidationFailure(nameof(dto.DepartmentId), "Department not found.")]);
+		}
+
+		var now = DateTime.UtcNow;
+		var collaborator = new Collaborator
+		{
+			Id = Guid.CreateVersion7(),
+			FullName = dto.FullName.Trim(),
+			Email = emailLower,
+			JoinDate = DateOnly.FromDateTime(now),
+			RoleKind = dto.RoleKind,
+			DepartmentId = dto.DepartmentId,
+			PasswordHash = PasswordHasher.Hash(dto.Password),
+			EmailVerified = true,
+			EmailVerifiedAt = now,
+			OnboardingCompletedAt = dto.SkipOnboarding ? now : null,
+			Status = CollaboratorStatus.Active,
+		};
+
+		Db.Collaborators.Add(collaborator);
+		await Db.SaveChangesAsync(ct);
+
+		var full = await Db.Collaborators
+			.Include(c => c.Department).Include(c => c.Role)
+			.FirstAsync(c => c.Id == collaborator.Id, ct);
 		return CollaboratorMapper.ToDto(full);
 	}
 

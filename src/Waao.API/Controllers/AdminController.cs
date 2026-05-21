@@ -31,6 +31,12 @@ public class AdminController(
 	public async Task<IActionResult> GrantXp(Guid id, [FromBody] GrantXpDto dto, CancellationToken ct)
 		=> Ok(await Service.GrantXpAsync(id, dto, Me, ct));
 
+	[HttpPost("users")]
+	[ProducesResponseType(typeof(CollaboratorDto), StatusCodes.Status201Created)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	public async Task<IActionResult> CreateUser([FromBody] AdminCreateUserDto dto, CancellationToken ct)
+		=> Created(string.Empty, await Service.CreateUserAsync(dto, Me, ct));
+
 	[HttpPatch("collaborators/{id:guid}/role-kind")]
 	public async Task<IActionResult> SetRoleKind(Guid id, [FromBody] SetRoleKindDto dto, CancellationToken ct)
 		=> Ok(await Service.SetRoleKindAsync(id, dto, Me, ct));

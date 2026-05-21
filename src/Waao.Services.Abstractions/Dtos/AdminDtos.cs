@@ -94,3 +94,15 @@ public record GrantXpDto
 	public int Amount { get; init; }
 	public string Reason { get; init; } = string.Empty;
 }
+
+// ----- Admin-created user (pre-activated, no email verification) -----
+
+public record AdminCreateUserDto
+{
+	public string FullName { get; init; } = string.Empty;
+	public string Email { get; init; } = string.Empty;
+	public string Password { get; init; } = string.Empty;
+	public Waao.Domain.Models.Enums.CollaboratorRoleKind RoleKind { get; init; } = Waao.Domain.Models.Enums.CollaboratorRoleKind.Collaborator;
+	public Guid? DepartmentId { get; init; }
+	public bool SkipOnboarding { get; init; } = true;
+}

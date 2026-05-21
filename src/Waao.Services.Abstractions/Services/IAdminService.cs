@@ -9,6 +9,7 @@ public interface IAdminService
 	Task<CollaboratorDto> SetRoleKindAsync(Guid collaboratorId, SetRoleKindDto dto, Guid actorId, CancellationToken ct = default);
 	Task<CollaboratorDto> SetCollaboratorRoleAsync(Guid collaboratorId, SetCollaboratorRoleDto dto, Guid actorId, CancellationToken ct = default);
 	Task<CollaboratorDto> GrantXpAsync(Guid collaboratorId, GrantXpDto dto, Guid adminId, CancellationToken ct = default);
+	Task<CollaboratorDto> CreateUserAsync(AdminCreateUserDto dto, Guid actorId, CancellationToken ct = default);
 
 	// Job roles
 	Task<IReadOnlyList<JobRoleDto>> ListJobRolesAsync(CancellationToken ct = default);
