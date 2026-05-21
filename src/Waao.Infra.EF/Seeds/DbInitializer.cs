@@ -177,20 +177,35 @@ public static class DbInitializer
 
 		foreach (var (email, name, password, role, joinDate) in users)
 		{
-			if (await db.Collaborators.AnyAsync(c => c.Email == email, ct)) continue;
+			var existing = await db.Collaborators.IgnoreQueryFilters()
+				.FirstOrDefaultAsync(c => c.Email == email, ct);
 
-			db.Collaborators.Add(new Collaborator
+			if (existing is null)
 			{
-				Id = Guid.CreateVersion7(),
-				FullName = name,
-				Email = email,
-				JoinDate = joinDate,
-				RoleKind = role,
-				PasswordHash = HashPassword(password),
-				OnboardingCompletedAt = DateTime.UtcNow,
-				EmailVerified = true,
-				EmailVerifiedAt = DateTime.UtcNow,
-			});
+				db.Collaborators.Add(new Collaborator
+				{
+					Id = Guid.CreateVersion7(),
+					FullName = name,
+					Email = email,
+					JoinDate = joinDate,
+					RoleKind = role,
+					PasswordHash = HashPassword(password),
+					OnboardingCompletedAt = DateTime.UtcNow,
+					EmailVerified = true,
+					EmailVerifiedAt = DateTime.UtcNow,
+				});
+				continue;
+			}
+
+			// Self-heal: super admin must always be an active, verified Admin.
+			// (See AdminService.SuperAdminEmail — same rule, enforced at startup too.)
+			var changed = false;
+			if (existing.RoleKind != CollaboratorRoleKind.Admin) { existing.RoleKind = CollaboratorRoleKind.Admin; changed = true; }
+			if (existing.Status != CollaboratorStatus.Active)   { existing.Status   = CollaboratorStatus.Active; changed = true; }
+			if (existing.IsDeleted)                              { existing.IsDeleted = false; existing.DeletedAt = null; changed = true; }
+			if (!existing.EmailVerified)                         { existing.EmailVerified = true; existing.EmailVerifiedAt ??= DateTime.UtcNow; changed = true; }
+			if (existing.OnboardingCompletedAt is null)          { existing.OnboardingCompletedAt = DateTime.UtcNow; changed = true; }
+			if (changed) existing.UpdatedAt = DateTime.UtcNow;
 		}
 	}
 
