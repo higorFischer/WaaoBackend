@@ -279,6 +279,19 @@ public sealed class KanbanService(
 		return new EpicDto { Id = epic.Id, Title = epic.Title, Description = epic.Description, ColorHex = epic.ColorHex, Rank = epic.Rank };
 	}
 
+	public async Task DeleteEpicAsync(Guid epicId, Guid currentCollaboratorId, CancellationToken ct = default)
+	{
+		var epic = await Db.Epics.Include(e => e.Board).ThenInclude(b => b.Members).FirstOrDefaultAsync(e => e.Id == epicId, ct)
+			?? throw new KeyNotFoundException($"Epic {epicId} not found.");
+		await EnsureCanWriteAsync(epic.Board, currentCollaboratorId, BoardMemberRole.Editor, await IsAdminAsync(currentCollaboratorId, ct), ct);
+		epic.IsDeleted = true;
+		epic.DeletedAt = DateTime.UtcNow;
+		await Db.Cards
+			.Where(c => c.EpicId == epicId)
+			.ExecuteUpdateAsync(s => s.SetProperty(c => c.EpicId, (Guid?)null), ct);
+		await Db.SaveChangesAsync(ct);
+	}
+
 	public async Task<CardLabelDto> CreateLabelAsync(Guid boardId, CreateLabelDto dto, Guid currentCollaboratorId, CancellationToken ct = default)
 	{
 		await LoadBoardWriteAsync(boardId, currentCollaboratorId, BoardMemberRole.Editor, await IsAdminAsync(currentCollaboratorId, ct), ct);
@@ -286,6 +299,22 @@ public sealed class KanbanService(
 		Db.CardLabels.Add(label);
 		await Db.SaveChangesAsync(ct);
 		return MapLabel(label);
+	}
+
+	public async Task DeleteLabelAsync(Guid labelId, Guid currentCollaboratorId, CancellationToken ct = default)
+	{
+		var label = await Db.CardLabels.Include(l => l.Board).ThenInclude(b => b.Members).FirstOrDefaultAsync(l => l.Id == labelId, ct)
+			?? throw new KeyNotFoundException($"Label {labelId} not found.");
+		await EnsureCanWriteAsync(label.Board, currentCollaboratorId, BoardMemberRole.Editor, await IsAdminAsync(currentCollaboratorId, ct), ct);
+		label.IsDeleted = true;
+		label.DeletedAt = DateTime.UtcNow;
+		var maps = await Db.CardLabelMaps.Where(m => m.LabelId == labelId && !m.IsDeleted).ToListAsync(ct);
+		foreach (var map in maps)
+		{
+			map.IsDeleted = true;
+			map.DeletedAt = DateTime.UtcNow;
+		}
+		await Db.SaveChangesAsync(ct);
 	}
 
 	// =====================================================================
@@ -615,6 +644,32 @@ public sealed class KanbanService(
 		item.UpdatedAt = DateTime.UtcNow;
 		await Db.SaveChangesAsync(ct);
 		return new CardChecklistItemDto { Id = item.Id, Text = item.Text, Done = item.Done, Rank = item.Rank };
+	}
+
+	public async Task DeleteChecklistAsync(Guid checklistId, Guid currentCollaboratorId, CancellationToken ct = default)
+	{
+		var checklist = await Db.CardChecklists.Include(c => c.Card).FirstOrDefaultAsync(c => c.Id == checklistId, ct)
+			?? throw new KeyNotFoundException("Checklist not found.");
+		await EnsureCanWriteAsync(await Db.Boards.Include(b => b.Members).FirstAsync(b => b.Id == checklist.Card.BoardId, ct), currentCollaboratorId, BoardMemberRole.Editor, await IsAdminAsync(currentCollaboratorId, ct), ct);
+		checklist.IsDeleted = true;
+		checklist.DeletedAt = DateTime.UtcNow;
+		var items = await Db.CardChecklistItems.Where(i => i.ChecklistId == checklistId && !i.IsDeleted).ToListAsync(ct);
+		foreach (var item in items)
+		{
+			item.IsDeleted = true;
+			item.DeletedAt = DateTime.UtcNow;
+		}
+		await Db.SaveChangesAsync(ct);
+	}
+
+	public async Task DeleteChecklistItemAsync(Guid itemId, Guid currentCollaboratorId, CancellationToken ct = default)
+	{
+		var item = await Db.CardChecklistItems.Include(i => i.Checklist).ThenInclude(c => c.Card).FirstOrDefaultAsync(i => i.Id == itemId, ct)
+			?? throw new KeyNotFoundException("Checklist item not found.");
+		await EnsureCanWriteAsync(await Db.Boards.Include(b => b.Members).FirstAsync(b => b.Id == item.Checklist.Card.BoardId, ct), currentCollaboratorId, BoardMemberRole.Editor, await IsAdminAsync(currentCollaboratorId, ct), ct);
+		item.IsDeleted = true;
+		item.DeletedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
 	}
 
 	// =====================================================================

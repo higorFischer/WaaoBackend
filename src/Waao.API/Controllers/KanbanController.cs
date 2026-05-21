@@ -76,9 +76,23 @@ public class KanbanController(IKanbanService Service) : ControllerBase
 	public async Task<IActionResult> CreateEpic(Guid boardId, [FromBody] CreateEpicDto dto, CancellationToken ct)
 		=> Created(string.Empty, await Service.CreateEpicAsync(boardId, dto, Me, ct));
 
+	[HttpDelete("epics/{id:guid}")]
+	public async Task<IActionResult> DeleteEpic(Guid id, CancellationToken ct)
+	{
+		await Service.DeleteEpicAsync(id, Me, ct);
+		return NoContent();
+	}
+
 	[HttpPost("boards/{boardId:guid}/labels")]
 	public async Task<IActionResult> CreateLabel(Guid boardId, [FromBody] CreateLabelDto dto, CancellationToken ct)
 		=> Created(string.Empty, await Service.CreateLabelAsync(boardId, dto, Me, ct));
+
+	[HttpDelete("labels/{id:guid}")]
+	public async Task<IActionResult> DeleteLabel(Guid id, CancellationToken ct)
+	{
+		await Service.DeleteLabelAsync(id, Me, ct);
+		return NoContent();
+	}
 
 	// ----- CARDS -----
 	[HttpPost("cards")]
@@ -141,9 +155,23 @@ public class KanbanController(IKanbanService Service) : ControllerBase
 	public async Task<IActionResult> CreateChecklist(Guid cardId, [FromBody] CreateChecklistDto dto, CancellationToken ct)
 		=> Created(string.Empty, await Service.CreateChecklistAsync(cardId, dto, Me, ct));
 
+	[HttpDelete("checklists/{id:guid}")]
+	public async Task<IActionResult> DeleteChecklist(Guid id, CancellationToken ct)
+	{
+		await Service.DeleteChecklistAsync(id, Me, ct);
+		return NoContent();
+	}
+
 	[HttpPost("checklists/{checklistId:guid}/items")]
 	public async Task<IActionResult> CreateChecklistItem(Guid checklistId, [FromBody] CreateChecklistItemDto dto, CancellationToken ct)
 		=> Created(string.Empty, await Service.CreateChecklistItemAsync(checklistId, dto, Me, ct));
+
+	[HttpDelete("checklist-items/{id:guid}")]
+	public async Task<IActionResult> DeleteChecklistItem(Guid id, CancellationToken ct)
+	{
+		await Service.DeleteChecklistItemAsync(id, Me, ct);
+		return NoContent();
+	}
 
 	[HttpPatch("checklist-items/{id:guid}")]
 	public async Task<IActionResult> UpdateChecklistItem(Guid id, [FromBody] UpdateChecklistItemDto dto, CancellationToken ct)

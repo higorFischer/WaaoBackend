@@ -17,7 +17,9 @@ public interface IKanbanService
 	Task DeleteColumnAsync(Guid columnId, Guid currentCollaboratorId, CancellationToken ct = default);
 
 	Task<EpicDto> CreateEpicAsync(Guid boardId, CreateEpicDto dto, Guid currentCollaboratorId, CancellationToken ct = default);
+	Task DeleteEpicAsync(Guid epicId, Guid currentCollaboratorId, CancellationToken ct = default);
 	Task<CardLabelDto> CreateLabelAsync(Guid boardId, CreateLabelDto dto, Guid currentCollaboratorId, CancellationToken ct = default);
+	Task DeleteLabelAsync(Guid labelId, Guid currentCollaboratorId, CancellationToken ct = default);
 
 	Task<CardDetailDto> CreateCardAsync(CreateCardDto dto, Guid currentCollaboratorId, CancellationToken ct = default);
 	Task<CardDetailDto> UpdateCardAsync(Guid cardId, UpdateCardDto dto, Guid currentCollaboratorId, CancellationToken ct = default);
@@ -33,6 +35,8 @@ public interface IKanbanService
 	Task DeleteCommentAsync(Guid commentId, Guid currentCollaboratorId, CancellationToken ct = default);
 
 	Task<CardChecklistDto> CreateChecklistAsync(Guid cardId, CreateChecklistDto dto, Guid currentCollaboratorId, CancellationToken ct = default);
+	Task DeleteChecklistAsync(Guid checklistId, Guid currentCollaboratorId, CancellationToken ct = default);
 	Task<CardChecklistItemDto> CreateChecklistItemAsync(Guid checklistId, CreateChecklistItemDto dto, Guid currentCollaboratorId, CancellationToken ct = default);
 	Task<CardChecklistItemDto> UpdateChecklistItemAsync(Guid itemId, UpdateChecklistItemDto dto, Guid currentCollaboratorId, CancellationToken ct = default);
+	Task DeleteChecklistItemAsync(Guid itemId, Guid currentCollaboratorId, CancellationToken ct = default);
 }
