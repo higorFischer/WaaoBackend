@@ -1,5 +1,6 @@
 using Waao.Domain.Models.Entities;
 using Waao.Services.Abstractions.Dtos;
+using Waao.Services.Services;
 
 namespace Waao.Services.Mappers;
 
@@ -30,6 +31,7 @@ public static class CollaboratorMapper
 		BadgeCount = c.Badges?.Count ?? 0,
 		RoleKind = c.RoleKind,
 		IsDeleted = c.IsDeleted,
+		IsSuperAdmin = string.Equals(c.Email, AdminService.SuperAdminEmail, StringComparison.OrdinalIgnoreCase),
 	};
 
 	public static void Apply(Collaborator entity, CreateCollaboratorDto dto)

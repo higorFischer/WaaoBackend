@@ -30,6 +30,9 @@ public record CollaboratorDto
 	// Soft-delete state (only populated in admin list)
 	public bool IsDeleted { get; init; }
 
+	// True for the irrevocable WAAO owner account (higor@waao.com.br).
+	public bool IsSuperAdmin { get; init; }
+
 	// Gamification snapshot
 	public long TotalXp { get; init; }
 	public int CurrentLevel { get; init; }

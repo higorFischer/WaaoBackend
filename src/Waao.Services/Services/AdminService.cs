@@ -23,6 +23,26 @@ public sealed class AdminService(
 	IValidator<AdminResetPasswordDto> ResetPasswordValidator) : IAdminService
 {
 	// =====================================================================
+	// SUPER ADMIN PROTECTION
+	// higor@waao.com.br is the irrevocable owner of the WAAO instance.
+	// Other admins can never demote, deactivate, soft-delete or reset their
+	// password. The super admin can still edit themselves through the normal
+	// auth flows (change own password, edit own profile, etc).
+	// =====================================================================
+	public const string SuperAdminEmail = "higor@waao.com.br";
+
+	private static bool IsSuperAdmin(Collaborator c)
+		=> string.Equals(c.Email, SuperAdminEmail, StringComparison.OrdinalIgnoreCase);
+
+	private static void GuardSuperAdmin(Collaborator target, Guid actorId, string op)
+	{
+		if (!IsSuperAdmin(target)) return;
+		if (target.Id == actorId) return;  // super admin acting on themselves is fine
+		throw new InvalidOperationException(
+			$"The super admin ({SuperAdminEmail}) is protected and cannot be {op} by other administrators.");
+	}
+
+	// =====================================================================
 	// PEOPLE
 	// =====================================================================
 
@@ -90,6 +110,10 @@ public sealed class AdminService(
 	{
 		var c = await Db.Collaborators.FirstOrDefaultAsync(x => x.Id == collaboratorId, ct)
 			?? throw new KeyNotFoundException($"Collaborator {collaboratorId} not found.");
+
+		// Super admin can never be demoted by anyone (including themselves).
+		if (IsSuperAdmin(c) && dto.RoleKind != CollaboratorRoleKind.Admin)
+			throw new InvalidOperationException($"The super admin ({SuperAdminEmail}) is permanently Admin.");
 
 		// Safety: never let the last Admin demote themselves out of Admin.
 		if (c.RoleKind == CollaboratorRoleKind.Admin && dto.RoleKind != CollaboratorRoleKind.Admin && c.Id == actorId)
@@ -374,13 +398,18 @@ public sealed class AdminService(
 
 	public async Task<CollaboratorDto> AdminUpdateUserAsync(Guid id, AdminUpdateUserDto dto, Guid actorId, CancellationToken ct = default)
 	{
-		_ = actorId;
 		await UpdateUserValidator.ValidateAndThrowAsync(dto, ct);
 
 		var c = await Db.Collaborators
 			.Include(x => x.Department).Include(x => x.Role).Include(x => x.Manager).Include(x => x.Badges)
 			.FirstOrDefaultAsync(x => x.Id == id, ct)
 			?? throw new KeyNotFoundException($"Collaborator {id} not found.");
+
+		GuardSuperAdmin(c, actorId, "edited");
+
+		// Super admin email is immutable — even self can't change it (it's a stable identifier).
+		if (IsSuperAdmin(c) && !string.Equals(c.Email, dto.Email.Trim(), StringComparison.OrdinalIgnoreCase))
+			throw new InvalidOperationException($"The super admin email ({SuperAdminEmail}) cannot be changed.");
 
 		var emailLower = dto.Email.Trim().ToLowerInvariant();
 		if (!string.Equals(c.Email, emailLower, StringComparison.OrdinalIgnoreCase))
@@ -406,11 +435,12 @@ public sealed class AdminService(
 
 	public async Task<CollaboratorDto> AdminResetPasswordAsync(Guid id, AdminResetPasswordDto dto, Guid actorId, CancellationToken ct = default)
 	{
-		_ = actorId;
 		await ResetPasswordValidator.ValidateAndThrowAsync(dto, ct);
 
 		var c = await Db.Collaborators.FirstOrDefaultAsync(x => x.Id == id, ct)
 			?? throw new KeyNotFoundException($"Collaborator {id} not found.");
+
+		GuardSuperAdmin(c, actorId, "password-reset");
 
 		c.PasswordHash = PasswordHasher.Hash(dto.NewPassword);
 		c.UpdatedAt = DateTime.UtcNow;
@@ -424,9 +454,12 @@ public sealed class AdminService(
 
 	public async Task<CollaboratorDto> AdminSetStatusAsync(Guid id, AdminSetStatusDto dto, Guid actorId, CancellationToken ct = default)
 	{
-		_ = actorId;
 		var c = await Db.Collaborators.FirstOrDefaultAsync(x => x.Id == id, ct)
 			?? throw new KeyNotFoundException($"Collaborator {id} not found.");
+
+		// Super admin must always remain Active.
+		if (IsSuperAdmin(c) && dto.Status != CollaboratorStatus.Active)
+			throw new InvalidOperationException($"The super admin ({SuperAdminEmail}) must remain Active.");
 
 		c.Status = dto.Status;
 		if (dto.Status != CollaboratorStatus.Active)
@@ -447,6 +480,10 @@ public sealed class AdminService(
 
 		var c = await Db.Collaborators.FirstOrDefaultAsync(x => x.Id == id, ct)
 			?? throw new KeyNotFoundException($"Collaborator {id} not found.");
+
+		// Super admin can NEVER be soft-deleted, not even by themselves.
+		if (IsSuperAdmin(c))
+			throw new InvalidOperationException($"The super admin ({SuperAdminEmail}) cannot be deleted.");
 
 		c.IsDeleted = true;
 		c.DeletedAt = DateTime.UtcNow;
