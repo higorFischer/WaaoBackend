@@ -29,6 +29,7 @@ public static class CollaboratorMapper
 		LongestStreakDays = c.LongestStreakDays,
 		BadgeCount = c.Badges?.Count ?? 0,
 		RoleKind = c.RoleKind,
+		IsDeleted = c.IsDeleted,
 	};
 
 	public static void Apply(Collaborator entity, CreateCollaboratorDto dto)

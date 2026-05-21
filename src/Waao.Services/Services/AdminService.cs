@@ -18,7 +18,9 @@ public sealed class AdminService(
 	BadgeEvaluator Badges,
 	GamificationEngine Gamification,
 	IValidator<GrantXpDto> GrantXpValidator,
-	IValidator<AdminCreateUserDto> CreateUserValidator) : IAdminService
+	IValidator<AdminCreateUserDto> CreateUserValidator,
+	IValidator<AdminUpdateUserDto> UpdateUserValidator,
+	IValidator<AdminResetPasswordDto> ResetPasswordValidator) : IAdminService
 {
 	// =====================================================================
 	// PEOPLE
@@ -348,6 +350,127 @@ public sealed class AdminService(
 			.Include(c => c.Department).Include(c => c.Role)
 			.FirstAsync(c => c.Id == collaborator.Id, ct);
 		return CollaboratorMapper.ToDto(full);
+	}
+
+	// =====================================================================
+	// USER MANAGEMENT
+	// =====================================================================
+
+	public async Task<IReadOnlyList<CollaboratorDto>> ListAllUsersAsync(bool includeDeleted, CancellationToken ct = default)
+	{
+		var query = Db.Collaborators
+			.Include(c => c.Department)
+			.Include(c => c.Role)
+			.Include(c => c.Manager)
+			.Include(c => c.Badges)
+			.AsQueryable();
+
+		if (includeDeleted)
+			query = query.IgnoreQueryFilters();
+
+		var list = await query.OrderBy(c => c.FullName).ToListAsync(ct);
+		return list.Select(CollaboratorMapper.ToDto).ToList();
+	}
+
+	public async Task<CollaboratorDto> AdminUpdateUserAsync(Guid id, AdminUpdateUserDto dto, Guid actorId, CancellationToken ct = default)
+	{
+		_ = actorId;
+		await UpdateUserValidator.ValidateAndThrowAsync(dto, ct);
+
+		var c = await Db.Collaborators
+			.Include(x => x.Department).Include(x => x.Role).Include(x => x.Manager).Include(x => x.Badges)
+			.FirstOrDefaultAsync(x => x.Id == id, ct)
+			?? throw new KeyNotFoundException($"Collaborator {id} not found.");
+
+		var emailLower = dto.Email.Trim().ToLowerInvariant();
+		if (!string.Equals(c.Email, emailLower, StringComparison.OrdinalIgnoreCase))
+		{
+			if (await Db.Collaborators.AnyAsync(x => x.Email == emailLower && x.Id != id, ct))
+				throw new ValidationException("Email already in use.", [new ValidationFailure(nameof(dto.Email), "Email is already in use.")]);
+		}
+
+		if (dto.DepartmentId.HasValue && !await Db.Departments.AnyAsync(d => d.Id == dto.DepartmentId, ct))
+			throw new KeyNotFoundException($"Department {dto.DepartmentId} not found.");
+
+		c.FullName = dto.FullName.Trim();
+		c.Email = emailLower;
+		c.DepartmentId = dto.DepartmentId;
+		c.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+
+		var saved = await Db.Collaborators
+			.Include(x => x.Department).Include(x => x.Role).Include(x => x.Manager).Include(x => x.Badges)
+			.FirstAsync(x => x.Id == id, ct);
+		return CollaboratorMapper.ToDto(saved);
+	}
+
+	public async Task<CollaboratorDto> AdminResetPasswordAsync(Guid id, AdminResetPasswordDto dto, Guid actorId, CancellationToken ct = default)
+	{
+		_ = actorId;
+		await ResetPasswordValidator.ValidateAndThrowAsync(dto, ct);
+
+		var c = await Db.Collaborators.FirstOrDefaultAsync(x => x.Id == id, ct)
+			?? throw new KeyNotFoundException($"Collaborator {id} not found.");
+
+		c.PasswordHash = PasswordHasher.Hash(dto.NewPassword);
+		c.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+
+		var saved = await Db.Collaborators
+			.Include(x => x.Department).Include(x => x.Role).Include(x => x.Manager).Include(x => x.Badges)
+			.FirstAsync(x => x.Id == id, ct);
+		return CollaboratorMapper.ToDto(saved);
+	}
+
+	public async Task<CollaboratorDto> AdminSetStatusAsync(Guid id, AdminSetStatusDto dto, Guid actorId, CancellationToken ct = default)
+	{
+		_ = actorId;
+		var c = await Db.Collaborators.FirstOrDefaultAsync(x => x.Id == id, ct)
+			?? throw new KeyNotFoundException($"Collaborator {id} not found.");
+
+		c.Status = dto.Status;
+		if (dto.Status != CollaboratorStatus.Active)
+			c.LastActivityDate = null;
+		c.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+
+		var saved = await Db.Collaborators
+			.Include(x => x.Department).Include(x => x.Role).Include(x => x.Manager).Include(x => x.Badges)
+			.FirstAsync(x => x.Id == id, ct);
+		return CollaboratorMapper.ToDto(saved);
+	}
+
+	public async Task DeleteUserAsync(Guid id, Guid actorId, CancellationToken ct = default)
+	{
+		if (id == actorId)
+			throw new InvalidOperationException("You cannot delete your own account.");
+
+		var c = await Db.Collaborators.FirstOrDefaultAsync(x => x.Id == id, ct)
+			?? throw new KeyNotFoundException($"Collaborator {id} not found.");
+
+		c.IsDeleted = true;
+		c.DeletedAt = DateTime.UtcNow;
+		c.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+	}
+
+	public async Task<CollaboratorDto> RestoreUserAsync(Guid id, Guid actorId, CancellationToken ct = default)
+	{
+		_ = actorId;
+		var c = await Db.Collaborators.IgnoreQueryFilters()
+			.Include(x => x.Department).Include(x => x.Role).Include(x => x.Manager).Include(x => x.Badges)
+			.FirstOrDefaultAsync(x => x.Id == id, ct)
+			?? throw new KeyNotFoundException($"Collaborator {id} not found.");
+
+		c.IsDeleted = false;
+		c.DeletedAt = null;
+		c.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+
+		var saved = await Db.Collaborators.IgnoreQueryFilters()
+			.Include(x => x.Department).Include(x => x.Role).Include(x => x.Manager).Include(x => x.Badges)
+			.FirstAsync(x => x.Id == id, ct);
+		return CollaboratorMapper.ToDto(saved);
 	}
 
 	// ----- helpers -----

@@ -27,6 +27,9 @@ public record CollaboratorDto
 	// Auth role (Collaborator / HR / Admin)
 	public CollaboratorRoleKind RoleKind { get; init; }
 
+	// Soft-delete state (only populated in admin list)
+	public bool IsDeleted { get; init; }
+
 	// Gamification snapshot
 	public long TotalXp { get; init; }
 	public int CurrentLevel { get; init; }

@@ -11,6 +11,14 @@ public interface IAdminService
 	Task<CollaboratorDto> GrantXpAsync(Guid collaboratorId, GrantXpDto dto, Guid adminId, CancellationToken ct = default);
 	Task<CollaboratorDto> CreateUserAsync(AdminCreateUserDto dto, Guid actorId, CancellationToken ct = default);
 
+	// User management
+	Task<IReadOnlyList<CollaboratorDto>> ListAllUsersAsync(bool includeDeleted, CancellationToken ct = default);
+	Task<CollaboratorDto> AdminUpdateUserAsync(Guid id, AdminUpdateUserDto dto, Guid actorId, CancellationToken ct = default);
+	Task<CollaboratorDto> AdminResetPasswordAsync(Guid id, AdminResetPasswordDto dto, Guid actorId, CancellationToken ct = default);
+	Task<CollaboratorDto> AdminSetStatusAsync(Guid id, AdminSetStatusDto dto, Guid actorId, CancellationToken ct = default);
+	Task DeleteUserAsync(Guid id, Guid actorId, CancellationToken ct = default);
+	Task<CollaboratorDto> RestoreUserAsync(Guid id, Guid actorId, CancellationToken ct = default);
+
 	// Job roles
 	Task<IReadOnlyList<JobRoleDto>> ListJobRolesAsync(CancellationToken ct = default);
 	Task<JobRoleDto> CreateJobRoleAsync(CreateJobRoleDto dto, CancellationToken ct = default);

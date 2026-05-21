@@ -19,6 +19,48 @@ public class AdminController(
 	private Guid Me => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
 		? id : throw new UnauthorizedAccessException("Missing subject claim.");
 
+	// ----- User management -----
+	[HttpGet("users")]
+	[ProducesResponseType(typeof(IReadOnlyList<CollaboratorDto>), StatusCodes.Status200OK)]
+	public async Task<IActionResult> ListAllUsers([FromQuery] bool includeDeleted, CancellationToken ct)
+		=> Ok(await Service.ListAllUsersAsync(includeDeleted, ct));
+
+	[HttpPut("users/{id:guid}")]
+	[ProducesResponseType(typeof(CollaboratorDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> AdminUpdateUser(Guid id, [FromBody] AdminUpdateUserDto dto, CancellationToken ct)
+		=> Ok(await Service.AdminUpdateUserAsync(id, dto, Me, ct));
+
+	[HttpPost("users/{id:guid}/reset-password")]
+	[ProducesResponseType(typeof(CollaboratorDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> AdminResetPassword(Guid id, [FromBody] AdminResetPasswordDto dto, CancellationToken ct)
+		=> Ok(await Service.AdminResetPasswordAsync(id, dto, Me, ct));
+
+	[HttpPost("users/{id:guid}/status")]
+	[ProducesResponseType(typeof(CollaboratorDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> AdminSetStatus(Guid id, [FromBody] AdminSetStatusDto dto, CancellationToken ct)
+		=> Ok(await Service.AdminSetStatusAsync(id, dto, Me, ct));
+
+	[HttpDelete("users/{id:guid}")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> DeleteUser(Guid id, CancellationToken ct)
+	{
+		await Service.DeleteUserAsync(id, Me, ct);
+		return NoContent();
+	}
+
+	[HttpPost("users/{id:guid}/restore")]
+	[ProducesResponseType(typeof(CollaboratorDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> RestoreUser(Guid id, CancellationToken ct)
+		=> Ok(await Service.RestoreUserAsync(id, Me, ct));
+
 	// ----- People -----
 	[HttpPost("collaborators/{id:guid}/promote")]
 	public async Task<IActionResult> Promote(Guid id, [FromBody] PromoteCollaboratorDto dto, CancellationToken ct)
