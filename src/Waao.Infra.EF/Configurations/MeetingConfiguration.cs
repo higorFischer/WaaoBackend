@@ -92,3 +92,50 @@ public class MeetingAgendaItemConfiguration : IEntityTypeConfiguration<MeetingAg
 		builder.HasQueryFilter(x => !x.IsDeleted);
 	}
 }
+
+public class MeetingTranscriptConfiguration : IEntityTypeConfiguration<MeetingTranscript>
+{
+	public void Configure(EntityTypeBuilder<MeetingTranscript> builder)
+	{
+		builder.ToTable("meeting_transcripts");
+		builder.HasKey(x => x.Id);
+
+		builder.HasOne(x => x.Meeting)
+			.WithMany()
+			.HasForeignKey(x => x.MeetingId)
+			.OnDelete(DeleteBehavior.Cascade);
+
+		// Unique: one transcript per meeting (when not deleted)
+		builder.HasIndex(x => x.MeetingId)
+			.IsUnique()
+			.HasFilter("is_deleted = false");
+
+		builder.HasQueryFilter(x => !x.IsDeleted);
+	}
+}
+
+public class MeetingTranscriptLineConfiguration : IEntityTypeConfiguration<MeetingTranscriptLine>
+{
+	public void Configure(EntityTypeBuilder<MeetingTranscriptLine> builder)
+	{
+		builder.ToTable("meeting_transcript_lines");
+		builder.HasKey(x => x.Id);
+
+		builder.Property(x => x.SpeakerName).IsRequired().HasMaxLength(160);
+		builder.Property(x => x.Text).IsRequired().HasMaxLength(4000);
+
+		builder.HasOne(x => x.Transcript)
+			.WithMany(t => t.Lines)
+			.HasForeignKey(x => x.TranscriptId)
+			.OnDelete(DeleteBehavior.Cascade);
+
+		builder.HasOne(x => x.SpeakerCollaborator)
+			.WithMany()
+			.HasForeignKey(x => x.SpeakerCollaboratorId)
+			.OnDelete(DeleteBehavior.SetNull);
+
+		builder.HasIndex(x => x.TranscriptId);
+
+		builder.HasQueryFilter(x => !x.IsDeleted);
+	}
+}

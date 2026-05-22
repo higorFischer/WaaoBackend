@@ -38,6 +38,8 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 	public DbSet<Meeting> Meetings => Set<Meeting>();
 	public DbSet<MeetingAttendee> MeetingAttendees => Set<MeetingAttendee>();
 	public DbSet<MeetingAgendaItem> MeetingAgendaItems => Set<MeetingAgendaItem>();
+	public DbSet<MeetingTranscript> MeetingTranscripts => Set<MeetingTranscript>();
+	public DbSet<MeetingTranscriptLine> MeetingTranscriptLines => Set<MeetingTranscriptLine>();
 
 	// Messaging
 	public DbSet<Channel> Channels => Set<Channel>();
