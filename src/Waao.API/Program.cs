@@ -13,6 +13,8 @@ using Waao.Infra.EF.Seeds;
 using Waao.Services.Abstractions.Dtos;
 using Waao.Services.Abstractions.Services;
 using Waao.Services.Auth;
+using CalendarService = Waao.Services.Services.CalendarService;
+using CalendarEventService = Waao.Services.Services.CalendarEventService;
 using Waao.Services.Gamification;
 using Waao.Services.Services;
 using Waao.Services.Validation;
@@ -78,6 +80,11 @@ builder.Services.AddScoped<ICourseService, CourseService>();
 builder.Services.AddScoped<ICourseCompletionService, CourseCompletionService>();
 builder.Services.AddScoped<IChallengeService, ChallengeService>();
 builder.Services.AddScoped<IChallengeAttemptService, ChallengeAttemptService>();
+
+// Calendar
+builder.Services.AddSingleton<IRecurrenceExpander, Waao.Services.Calendar.RecurrenceExpander>();
+builder.Services.AddScoped<ICalendarService, CalendarService>();
+builder.Services.AddScoped<ICalendarEventService, CalendarEventService>();
 
 // Documentation viewer (clones WaaoDocs locally + serves to frontend)
 builder.Services.Configure<Waao.Services.Documentation.DocumentationOptions>(builder.Configuration.GetSection("Documentation"));

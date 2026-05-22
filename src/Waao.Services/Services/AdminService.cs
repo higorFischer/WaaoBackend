@@ -10,6 +10,7 @@ using Waao.Services.Auth;
 using Waao.Services.Authorization;
 using Waao.Services.Gamification;
 using Waao.Services.Mappers;
+using CalendarEntity = Waao.Domain.Models.Entities.Calendar.Calendar;
 
 namespace Waao.Services.Services;
 
@@ -237,6 +238,18 @@ public sealed class AdminService(
 	{
 		var entity = new Department { Id = Guid.CreateVersion7(), Name = dto.Name, Description = dto.Description, ColorHex = dto.ColorHex };
 		Db.Departments.Add(entity);
+
+		// Auto-create a Department-scope calendar for the new department.
+		Db.Calendars.Add(new CalendarEntity
+		{
+			Id = Guid.CreateVersion7(),
+			Name = dto.Name,
+			ColorHex = dto.ColorHex ?? "#2A6B7E",
+			Scope = CalendarScope.Department,
+			DepartmentId = entity.Id,
+			CreatedAt = DateTime.UtcNow,
+		});
+
 		await Db.SaveChangesAsync(ct);
 		return new DepartmentDto { Id = entity.Id, Name = entity.Name, Description = entity.Description, ColorHex = entity.ColorHex };
 	}

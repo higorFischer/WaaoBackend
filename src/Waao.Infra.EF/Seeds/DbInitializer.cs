@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Waao.Domain.Models.Entities;
 using Waao.Domain.Models.Enums;
+using CalendarEntity = Waao.Domain.Models.Entities.Calendar.Calendar;
 
 namespace Waao.Infra.EF.Seeds;
 
@@ -19,6 +20,9 @@ public static class DbInitializer
 		await SeedDefaultCoursesAsync(db, ct);
 		await SeedGitCoursesAsync(db, ct);
 		await SeedDefaultChallengesAsync(db, ct);
+
+		// Calendars: one Company calendar + one per department (idempotent).
+		await SeedCalendarsAsync(db, ct);
 	}
 
 	// ---------- Levels (0 -> 50k XP) ----------
@@ -711,6 +715,47 @@ public static class DbInitializer
 					CorrectOption = correct,
 				});
 			}
+		}
+
+		await db.SaveChangesAsync(ct);
+	}
+
+	// ---------- Calendars ----------
+	public static async Task SeedCalendarsAsync(WaaoDbContext db, CancellationToken ct = default)
+	{
+		// Company calendar (exactly one, idempotent).
+		if (!await db.Calendars.AnyAsync(c => c.Scope == CalendarScope.Company, ct))
+		{
+			db.Calendars.Add(new CalendarEntity
+			{
+				Id = Guid.CreateVersion7(),
+				Name = "WAAO",
+				ColorHex = "#2A6B7E",
+				Scope = CalendarScope.Company,
+				CreatedAt = DateTime.UtcNow,
+			});
+		}
+
+		// One Department calendar per department (idempotent).
+		var existingDeptCalendarIds = await db.Calendars
+			.Where(c => c.Scope == CalendarScope.Department && c.DepartmentId != null)
+			.Select(c => c.DepartmentId!.Value)
+			.ToListAsync(ct);
+
+		var depts = await db.Departments.ToListAsync(ct);
+		foreach (var dept in depts)
+		{
+			if (existingDeptCalendarIds.Contains(dept.Id)) continue;
+
+			db.Calendars.Add(new CalendarEntity
+			{
+				Id = Guid.CreateVersion7(),
+				Name = dept.Name,
+				ColorHex = dept.ColorHex ?? "#2A6B7E",
+				Scope = CalendarScope.Department,
+				DepartmentId = dept.Id,
+				CreatedAt = DateTime.UtcNow,
+			});
 		}
 
 		await db.SaveChangesAsync(ct);
