@@ -22,10 +22,22 @@ public sealed class GrantXpTests
 			Email = "t@waao.com.br",
 			JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
 			CurrentLevel = 0,
+			RoleKind = CollaboratorRoleKind.Collaborator,
 		};
 		db.Collaborators.Add(c);
+
+		// The granting actor must exist and out-rank the recipient (RankGuard rule).
+		var admin = new Collaborator
+		{
+			Id = Guid.CreateVersion7(),
+			FullName = "Admin",
+			Email = "admin@waao.com.br",
+			JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
+			RoleKind = CollaboratorRoleKind.Admin,
+		};
+		db.Collaborators.Add(admin);
 		db.SaveChanges();
-		return (AdminServiceFactory.Create(db), db, c, Guid.CreateVersion7());
+		return (AdminServiceFactory.Create(db), db, c, admin.Id);
 	}
 
 	[Fact]

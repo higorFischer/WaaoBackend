@@ -26,8 +26,8 @@ public sealed class CalendarEventService(
 		var visibleIds = visibleCalendars.Select(c => c.Id).ToHashSet();
 
 		// Optionally filter by requested calendar IDs.
-		if (query.CalendarIds is { Length: > 0 })
-			visibleIds.IntersectWith(query.CalendarIds);
+		if (query.ParsedCalendarIds.Count > 0)
+			visibleIds.IntersectWith(query.ParsedCalendarIds);
 
 		// Fetch base events that could have occurrences in the window:
 		// 1. Non-recurring events whose starts_at falls in [from, to]

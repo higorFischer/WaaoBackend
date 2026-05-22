@@ -79,5 +79,16 @@ public record EventWindowQueryDto
 {
 	public DateTime FromUtc { get; init; }
 	public DateTime ToUtc { get; init; }
-	public Guid[]? CalendarIds { get; init; }
+
+	/// <summary>Comma-separated calendar ids to filter by (e.g. "guid1,guid2"). Empty/null = all visible.</summary>
+	public string? CalendarIds { get; init; }
+
+	/// <summary>Parsed, valid Guids from <see cref="CalendarIds"/>. Empty when none supplied.</summary>
+	public IReadOnlyList<Guid> ParsedCalendarIds =>
+		string.IsNullOrWhiteSpace(CalendarIds)
+			? []
+			: [.. CalendarIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+				.Select(s => Guid.TryParse(s, out var g) ? g : (Guid?)null)
+				.Where(g => g is not null)
+				.Select(g => g!.Value)];
 }
