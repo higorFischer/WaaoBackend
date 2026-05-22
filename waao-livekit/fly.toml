@@ -1,0 +1,37 @@
+app = "waao-livekit"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  strategy = "immediate"
+
+# Signalling — WebSocket, fronted by Fly's TLS so clients reach wss://waao-livekit.fly.dev
+[[services]]
+  protocol = "tcp"
+  internal_port = 7880
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+# ICE-TCP fallback for clients that cannot use UDP
+[[services]]
+  protocol = "tcp"
+  internal_port = 7881
+
+  [[services.ports]]
+    port = 7881
+
+# UDP media (single multiplexed port)
+[[services]]
+  protocol = "udp"
+  internal_port = 7882
+
+  [[services.ports]]
+    port = 7882
+
+[[vm]]
+  memory = "1gb"
+  cpus = 1
