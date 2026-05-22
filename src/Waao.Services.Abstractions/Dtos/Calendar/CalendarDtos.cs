@@ -46,6 +46,8 @@ public record CalendarOccurrenceDto
 	public Guid CalendarId { get; init; }
 	public bool IsRecurring { get; init; }
 	public bool IsOverride { get; init; }
+	/// <summary>Non-null when this occurrence backs a Meeting the caller attends or organizes.</summary>
+	public Guid? MeetingId { get; init; }
 }
 
 public record CreateCalendarEventDto

@@ -4,6 +4,7 @@ using Waao.Domain.Models.Enums;
 using Waao.Infra.EF;
 using Waao.Services.Abstractions.Dtos.Calendar;
 using Waao.Services.Abstractions.Services;
+using Waao.Domain.Models.Entities.Meetings;
 
 namespace Waao.Services.Services;
 
@@ -41,6 +42,37 @@ public sealed class CalendarEventService(
 				))
 			.ToListAsync(ct);
 
+		// Also include events that back a Meeting the caller attends or organizes.
+		// These events may sit on a different calendar (the organizer's personal calendar).
+		var meetingEventIds = await Db.Meetings
+			.Where(m =>
+				m.OrganizerId == collaboratorId ||
+				m.Attendees.Any(a => a.CollaboratorId == collaboratorId))
+			.Select(m => m.CalendarEventId)
+			.ToListAsync(ct);
+
+		// Build a map: calendarEventId -> meetingId for meeting-backed events
+		var meetingByEventId = await Db.Meetings
+			.Where(m =>
+				m.OrganizerId == collaboratorId ||
+				m.Attendees.Any(a => a.CollaboratorId == collaboratorId))
+			.ToDictionaryAsync(m => m.CalendarEventId, m => m.Id, ct);
+
+		if (meetingEventIds.Count > 0)
+		{
+			var existingEventIds = baseEvents.Select(e => e.Id).ToHashSet();
+			var meetingEvents = await Db.CalendarEvents
+				.Where(e =>
+					meetingEventIds.Contains(e.Id) &&
+					!existingEventIds.Contains(e.Id) &&
+					(
+						(e.RecurrenceRule == null && e.StartsAtUtc >= query.FromUtc && e.StartsAtUtc <= query.ToUtc) ||
+						(e.RecurrenceRule != null && (e.RecurrenceEndUtc == null || e.RecurrenceEndUtc >= query.FromUtc))
+					))
+				.ToListAsync(ct);
+			baseEvents.AddRange(meetingEvents);
+		}
+
 		if (baseEvents.Count == 0) return [];
 
 		var eventIds = baseEvents.Select(e => e.Id).ToList();
@@ -64,6 +96,8 @@ public sealed class CalendarEventService(
 				evt.RecurrenceEndUtc,
 				query.FromUtc,
 				query.ToUtc);
+
+			meetingByEventId.TryGetValue(evt.Id, out var meetingId);
 
 			foreach (var occStart in occurrenceStarts)
 			{
@@ -92,6 +126,7 @@ public sealed class CalendarEventService(
 					CalendarId = evt.CalendarId,
 					IsRecurring = evt.RecurrenceRule is not null,
 					IsOverride = over is not null,
+					MeetingId = meetingId == Guid.Empty ? null : meetingId,
 				});
 			}
 		}

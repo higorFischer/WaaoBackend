@@ -86,6 +86,9 @@ builder.Services.AddSingleton<IRecurrenceExpander, Waao.Services.Calendar.Recurr
 builder.Services.AddScoped<ICalendarService, CalendarService>();
 builder.Services.AddScoped<ICalendarEventService, CalendarEventService>();
 
+// Meetings
+builder.Services.AddScoped<IMeetingService, Waao.Services.Services.MeetingService>();
+
 // Documentation viewer (clones WaaoDocs locally + serves to frontend)
 builder.Services.Configure<Waao.Services.Documentation.DocumentationOptions>(builder.Configuration.GetSection("Documentation"));
 builder.Services.AddSingleton<IDocumentationService, Waao.Services.Documentation.DocumentationService>();
