@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Waao.Domain.Models.Entities;
 using Waao.Domain.Models.Entities.Calendar;
 using Waao.Domain.Models.Entities.Kanban;
+using Waao.Domain.Models.Entities.Meetings;
 
 namespace Waao.Infra.EF;
 
@@ -30,6 +31,11 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 	public DbSet<Calendar> Calendars => Set<Calendar>();
 	public DbSet<CalendarEvent> CalendarEvents => Set<CalendarEvent>();
 	public DbSet<EventOccurrenceOverride> EventOccurrenceOverrides => Set<EventOccurrenceOverride>();
+
+	// Meetings
+	public DbSet<Meeting> Meetings => Set<Meeting>();
+	public DbSet<MeetingAttendee> MeetingAttendees => Set<MeetingAttendee>();
+	public DbSet<MeetingAgendaItem> MeetingAgendaItems => Set<MeetingAgendaItem>();
 
 	// Kanban
 	public DbSet<Board> Boards => Set<Board>();
