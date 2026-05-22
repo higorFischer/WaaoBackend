@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Waao.Domain.Models.Entities;
+using Waao.Domain.Models.Entities.Messaging;
 using Waao.Domain.Models.Enums;
 using CalendarEntity = Waao.Domain.Models.Entities.Calendar.Calendar;
 
@@ -23,6 +24,9 @@ public static class DbInitializer
 
 		// Calendars: one Company calendar + one per department (idempotent).
 		await SeedCalendarsAsync(db, ct);
+
+		// Messaging: #general + one channel per department (idempotent).
+		await SeedChannelsAsync(db, ct);
 	}
 
 	// ---------- Levels (0 -> 50k XP) ----------
@@ -756,6 +760,102 @@ public static class DbInitializer
 				DepartmentId = dept.Id,
 				CreatedAt = DateTime.UtcNow,
 			});
+		}
+
+		await db.SaveChangesAsync(ct);
+	}
+
+	// ---------- Channels (messaging seed) ----------
+	public static async Task SeedChannelsAsync(WaaoDbContext db, CancellationToken ct = default)
+	{
+		// #general (Scope=General, Kind=Public) — exactly one, idempotent
+		if (!await db.Channels.AnyAsync(c => c.Scope == ChannelScope.General, ct))
+		{
+			var systemUser = await db.Collaborators.IgnoreQueryFilters()
+				.FirstOrDefaultAsync(c => c.Email == "higor@waao.com.br", ct);
+
+			// If no system user yet (empty DB), defer channel creation
+			if (systemUser is null)
+				return;
+
+			var general = new Channel
+			{
+				Id = Guid.CreateVersion7(),
+				Name = "general",
+				Description = "Company-wide channel. Everyone is a member.",
+				Kind = ChannelKind.Public,
+				Scope = ChannelScope.General,
+				CreatedById = systemUser.Id,
+				CreatedAt = DateTime.UtcNow,
+			};
+			db.Channels.Add(general);
+
+			// Add all active collaborators as members
+			var allCollaborators = await db.Collaborators
+				.Where(c => c.Status == CollaboratorStatus.Active)
+				.Select(c => c.Id)
+				.ToListAsync(ct);
+
+			foreach (var collaboratorId in allCollaborators)
+			{
+				db.ChannelMembers.Add(new ChannelMember
+				{
+					Id = Guid.CreateVersion7(),
+					ChannelId = general.Id,
+					CollaboratorId = collaboratorId,
+					JoinedAt = DateTime.UtcNow,
+					CreatedAt = DateTime.UtcNow,
+				});
+			}
+		}
+
+		// One Department-scope channel per department (idempotent)
+		var existingDeptChannelIds = await db.Channels
+			.Where(c => c.Scope == ChannelScope.Department && c.DepartmentId != null)
+			.Select(c => c.DepartmentId!.Value)
+			.ToListAsync(ct);
+
+		var depts = await db.Departments.ToListAsync(ct);
+		var systemCreator = await db.Collaborators.IgnoreQueryFilters()
+			.FirstOrDefaultAsync(c => c.Email == "higor@waao.com.br", ct);
+
+		if (systemCreator is null)
+			return;
+
+		foreach (var dept in depts)
+		{
+			if (existingDeptChannelIds.Contains(dept.Id)) continue;
+
+			var channel = new Channel
+			{
+				Id = Guid.CreateVersion7(),
+				Name = dept.Name.ToLowerInvariant().Replace(" ", "-"),
+				Description = $"{dept.Name} team channel.",
+				Kind = ChannelKind.Public,
+				Scope = ChannelScope.Department,
+				DepartmentId = dept.Id,
+				CreatedById = systemCreator.Id,
+				CreatedAt = DateTime.UtcNow,
+			};
+			db.Channels.Add(channel);
+
+			// Add department members
+			var deptMembers = await db.Collaborators
+				.Where(c => c.DepartmentId == dept.Id && c.Status == CollaboratorStatus.Active)
+				.Select(c => c.Id)
+				.ToListAsync(ct);
+
+			foreach (var memberId in deptMembers)
+			{
+				db.ChannelMembers.Add(new ChannelMember
+				{
+					Id = Guid.CreateVersion7(),
+					ChannelId = channel.Id,
+					CollaboratorId = memberId,
+					JoinedAt = DateTime.UtcNow,
+					CreatedAt = DateTime.UtcNow,
+				});
+			}
 		}
 
 		await db.SaveChangesAsync(ct);

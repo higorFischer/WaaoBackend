@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Waao.API.Hubs;
 using Waao.API.Middleware;
 using Waao.Domain.Models.Enums;
 using Waao.Infra.EF;
@@ -49,6 +50,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 			IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Key)),
 			ClockSkew = TimeSpan.FromSeconds(30),
 		};
+		// SignalR WebSocket transport: read JWT from the access_token query string for /hubs paths
+		options.Events = new JwtBearerEvents
+		{
+			OnMessageReceived = ctx =>
+			{
+				var token = ctx.Request.Query["access_token"].ToString();
+				var path = ctx.HttpContext.Request.Path;
+				if (!string.IsNullOrEmpty(token) && path.StartsWithSegments("/hubs"))
+					ctx.Token = token;
+				return Task.CompletedTask;
+			},
+		};
 	});
 
 builder.Services.AddAuthorization(options =>
@@ -89,6 +102,11 @@ builder.Services.AddScoped<ICalendarEventService, CalendarEventService>();
 // Meetings
 builder.Services.AddScoped<IMeetingService, Waao.Services.Services.MeetingService>();
 
+// Messaging
+builder.Services.AddScoped<IChannelService, ChannelService>();
+builder.Services.AddScoped<IMessageService, MessageService>();
+builder.Services.AddSignalR();
+
 // Documentation viewer (clones WaaoDocs locally + serves to frontend)
 builder.Services.Configure<Waao.Services.Documentation.DocumentationOptions>(builder.Configuration.GetSection("Documentation"));
 builder.Services.AddSingleton<IDocumentationService, Waao.Services.Documentation.DocumentationService>();
@@ -123,13 +141,15 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 // CORS — origins from config (Cors:AllowedOrigins, comma-separated); defaults to dev servers
+// AllowCredentials is required for SignalR WebSocket transport
 var corsOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? "http://localhost:5173,http://localhost:3000")
 	.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(options =>
 	options.AddPolicy("Frontend", p => p
 		.WithOrigins(corsOrigins)
 		.AllowAnyHeader()
-		.AllowAnyMethod()));
+		.AllowAnyMethod()
+		.AllowCredentials()));
 
 builder.Services.AddHttpClient("resend", c => c.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddSingleton<Waao.Services.Abstractions.Services.IEmailSender>(sp =>
@@ -187,6 +207,7 @@ app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<MessagingHub>("/hubs/messaging");
 
 app.MapGet("/", () => Results.Redirect("/swagger")).AllowAnonymous();
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", service = "waao-api", timestamp = DateTime.UtcNow }))

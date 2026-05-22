@@ -2,6 +2,7 @@ using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.EntityFrameworkCore;
 using Waao.Domain.Models.Entities;
+using Waao.Domain.Models.Entities.Messaging;
 using Waao.Domain.Models.Enums;
 using Waao.Infra.EF;
 using Waao.Services.Abstractions.Dtos;
@@ -249,6 +250,29 @@ public sealed class AdminService(
 			DepartmentId = entity.Id,
 			CreatedAt = DateTime.UtcNow,
 		});
+
+		// Auto-create a Department-scope messaging channel for the new department.
+		// Use the first active admin as the channel creator (falls back to system creator).
+		var creator = await Db.Collaborators
+			.Where(c => c.RoleKind == CollaboratorRoleKind.Admin && c.Status == CollaboratorStatus.Active)
+			.OrderBy(c => c.CreatedAt)
+			.Select(c => c.Id)
+			.FirstOrDefaultAsync(ct);
+
+		if (creator != default)
+		{
+			Db.Channels.Add(new Channel
+			{
+				Id = Guid.CreateVersion7(),
+				Name = dto.Name.ToLowerInvariant().Replace(" ", "-"),
+				Description = $"{dto.Name} team channel.",
+				Kind = ChannelKind.Public,
+				Scope = ChannelScope.Department,
+				DepartmentId = entity.Id,
+				CreatedById = creator,
+				CreatedAt = DateTime.UtcNow,
+			});
+		}
 
 		await Db.SaveChangesAsync(ct);
 		return new DepartmentDto { Id = entity.Id, Name = entity.Name, Description = entity.Description, ColorHex = entity.ColorHex };
