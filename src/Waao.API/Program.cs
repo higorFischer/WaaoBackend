@@ -104,9 +104,9 @@ builder.Services.AddScoped<ICalendarEventService, CalendarEventService>();
 // Meetings
 builder.Services.AddScoped<IMeetingService, Waao.Services.Services.MeetingService>();
 
-// JaaS video
-builder.Services.Configure<JaasOptions>(builder.Configuration.GetSection("Jaas"));
-builder.Services.AddSingleton<IJaasTokenService, JaasTokenService>();
+// LiveKit video
+builder.Services.Configure<LiveKitOptions>(builder.Configuration.GetSection("LiveKit"));
+builder.Services.AddSingleton<ILiveKitTokenService, LiveKitTokenService>();
 
 // Messaging
 builder.Services.AddScoped<IChannelService, ChannelService>();

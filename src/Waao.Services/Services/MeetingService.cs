@@ -16,8 +16,8 @@ public sealed class MeetingService(
 	WaaoDbContext Db,
 	ICalendarService CalendarService,
 	INotificationService NotificationService,
-	IJaasTokenService JaasTokenService,
-	IOptions<JaasOptions> JaasOptions) : IMeetingService
+	ILiveKitTokenService LiveKitTokenService,
+	IOptions<LiveKitOptions> LiveKitOptions) : IMeetingService
 {
 	// =====================================================================
 	// CREATE
@@ -345,14 +345,11 @@ public sealed class MeetingService(
 
 		var moderator = callerId == meeting.OrganizerId;
 		var room = $"waao-{meetingId:N}";
-		var options = JaasOptions.Value;
 
-		var token = JaasTokenService.MintToken(new JaasTokenRequest
+		var token = LiveKitTokenService.MintToken(new LiveKitTokenRequest
 		{
 			CollaboratorId = callerId,
 			Name = caller.FullName,
-			Email = caller.Email,
-			Avatar = caller.PhotoUrl,
 			Room = room,
 			Moderator = moderator,
 		});
@@ -360,7 +357,7 @@ public sealed class MeetingService(
 		return new MeetingVideoTokenDto
 		{
 			Token = token,
-			AppId = options.AppId,
+			Url = LiveKitOptions.Value.Url,
 			Room = room,
 		};
 	}
