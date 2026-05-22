@@ -159,8 +159,9 @@ public sealed class MessageService(
 				MentionedCollaboratorName = c.FullName,
 			}).ToList();
 
-			// Emit notifications
-			var bodySnippet = dto.Body.Length > 100 ? dto.Body[..100] + "…" : dto.Body;
+			// Emit notifications — strip mention tokens so the snippet shows @Name, not raw ids.
+			var plainBody = MentionParser.ToPlainText(dto.Body);
+			var bodySnippet = plainBody.Length > 100 ? plainBody[..100] + "…" : plainBody;
 			foreach (var recipientId in eligibleIds)
 			{
 				await NotificationService.CreateAsync(

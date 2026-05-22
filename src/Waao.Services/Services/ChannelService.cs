@@ -4,6 +4,7 @@ using Waao.Domain.Models.Enums;
 using Waao.Infra.EF;
 using Waao.Services.Abstractions.Dtos.Messaging;
 using Waao.Services.Abstractions.Services;
+using Waao.Services.Messaging;
 
 namespace Waao.Services.Services;
 
@@ -99,7 +100,7 @@ public sealed class ChannelService(
 				MemberCount = memberCount,
 				IsMember = true,
 				UnreadCount = unreadCount,
-				LastMessagePreview = lastMsg?.Body is { } b ? (b.Length > 80 ? b[..80] + "…" : b) : null,
+				LastMessagePreview = PreviewOf(lastMsg?.Body),
 				LastMessageAtUtc = lastMsg?.CreatedAt,
 				OtherMember = otherMember,
 			});
@@ -523,9 +524,17 @@ public sealed class ChannelService(
 			MemberCount = members.Count,
 			IsMember = isMember,
 			UnreadCount = unreadCount,
-			LastMessagePreview = lastMsg?.Body is { } b ? (b.Length > 80 ? b[..80] + "…" : b) : null,
+			LastMessagePreview = PreviewOf(lastMsg?.Body),
 			LastMessageAtUtc = lastMsg?.CreatedAt,
 			OtherMember = otherMember,
 		};
+	}
+
+	// Channel-list preview: mention tokens collapse to @Name, then truncate.
+	private static string? PreviewOf(string? body)
+	{
+		if (string.IsNullOrEmpty(body)) return null;
+		var plain = MentionParser.ToPlainText(body);
+		return plain.Length > 80 ? plain[..80] + "…" : plain;
 	}
 }
