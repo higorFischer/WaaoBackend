@@ -1,5 +1,14 @@
 namespace Waao.Services.Abstractions.Dtos.Meetings;
 
+public record MeetingTranscriptSummaryDto
+{
+	public Guid MeetingId { get; init; }
+	public string MeetingTitle { get; init; } = string.Empty;
+	public DateTime MeetingStartsAtUtc { get; init; }
+	public DateTime GeneratedAtUtc { get; init; }
+	public int LineCount { get; init; }
+}
+
 public record IngestTranscriptDto
 {
 	public IReadOnlyList<IngestTranscriptLineDto> Lines { get; init; } = [];

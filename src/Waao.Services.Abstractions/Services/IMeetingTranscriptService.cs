@@ -16,4 +16,10 @@ public interface IMeetingTranscriptService
 	/// The caller must be organizer or attendee; throws <see cref="UnauthorizedAccessException"/> otherwise.
 	/// </summary>
 	Task<MeetingTranscriptDto?> GetAsync(Guid meetingId, Guid callerId, CancellationToken ct = default);
+
+	/// <summary>
+	/// Returns a summary of every transcript the caller can access (organizer or attendee),
+	/// ordered by <see cref="MeetingTranscriptSummaryDto.GeneratedAtUtc"/> descending.
+	/// </summary>
+	Task<IReadOnlyList<MeetingTranscriptSummaryDto>> ListMineAsync(Guid callerId, CancellationToken ct = default);
 }

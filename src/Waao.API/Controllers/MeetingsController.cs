@@ -25,6 +25,11 @@ public class MeetingsController(
 	public async Task<IActionResult> Create([FromBody] CreateMeetingDto dto, CancellationToken ct)
 		=> Created(string.Empty, await MeetingService.CreateAsync(dto, Me, ct));
 
+	[HttpGet("transcripts")]
+	[ProducesResponseType(typeof(IReadOnlyList<MeetingTranscriptSummaryDto>), StatusCodes.Status200OK)]
+	public async Task<IActionResult> ListTranscripts(CancellationToken ct)
+		=> Ok(await TranscriptService.ListMineAsync(Me, ct));
+
 	[HttpGet("{id:guid}")]
 	[ProducesResponseType(typeof(MeetingDto), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]

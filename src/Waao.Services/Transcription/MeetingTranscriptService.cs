@@ -75,6 +75,39 @@ public sealed class MeetingTranscriptService(WaaoDbContext Db) : IMeetingTranscr
 		await Db.SaveChangesAsync(ct);
 	}
 
+	public async Task<IReadOnlyList<MeetingTranscriptSummaryDto>> ListMineAsync(Guid callerId, CancellationToken ct = default)
+	{
+		// Collect meeting IDs accessible to the caller (organizer or attendee)
+		var attendedMeetingIds = await Db.MeetingAttendees
+			.Where(a => a.CollaboratorId == callerId)
+			.Select(a => a.MeetingId)
+			.ToListAsync(ct);
+
+		var organizedMeetingIds = await Db.Meetings
+			.Where(m => m.OrganizerId == callerId)
+			.Select(m => m.Id)
+			.ToListAsync(ct);
+
+		var accessibleIds = attendedMeetingIds.Union(organizedMeetingIds).ToHashSet();
+
+		// Load transcripts with their meeting + calendar event
+		var transcripts = await Db.MeetingTranscripts
+			.Include(t => t.Meeting).ThenInclude(m => m.CalendarEvent)
+			.Include(t => t.Lines)
+			.Where(t => accessibleIds.Contains(t.MeetingId))
+			.OrderByDescending(t => t.GeneratedAtUtc)
+			.ToListAsync(ct);
+
+		return transcripts.Select(t => new MeetingTranscriptSummaryDto
+		{
+			MeetingId = t.MeetingId,
+			MeetingTitle = t.Meeting.CalendarEvent.Title,
+			MeetingStartsAtUtc = t.Meeting.CalendarEvent.StartsAtUtc,
+			GeneratedAtUtc = t.GeneratedAtUtc,
+			LineCount = t.Lines.Count(l => !l.IsDeleted),
+		}).ToList();
+	}
+
 	public async Task<MeetingTranscriptDto?> GetAsync(Guid meetingId, Guid callerId, CancellationToken ct = default)
 	{
 		// Verify the meeting exists and check access
