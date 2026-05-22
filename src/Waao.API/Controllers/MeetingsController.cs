@@ -75,6 +75,19 @@ public class MeetingsController(
 	public async Task<IActionResult> GetVideoToken(Guid id, CancellationToken ct)
 		=> Ok(await MeetingService.GetVideoTokenAsync(id, Me, ct));
 
+	[HttpGet("{id:guid}/transcription-enabled")]
+	[AllowAnonymous]
+	[ProducesResponseType(typeof(TranscriptionEnabledDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> GetTranscriptionEnabled(Guid id, CancellationToken ct)
+	{
+		var key = Request.Headers["X-Transcription-Key"].FirstOrDefault();
+		if (string.IsNullOrWhiteSpace(key) || key != TranscriptionOptions.Value.IngestKey)
+			return Unauthorized();
+		return Ok(await MeetingService.GetTranscriptionEnabledAsync(id, ct));
+	}
+
 	[HttpPost("{id:guid}/transcript")]
 	[AllowAnonymous]
 	[ProducesResponseType(StatusCodes.Status204NoContent)]
