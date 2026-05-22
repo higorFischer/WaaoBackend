@@ -34,4 +34,9 @@ public class DocumentationController(IDocumentationService Service) : Controller
 	[ProducesResponseType(typeof(DocRefreshResultDto), StatusCodes.Status200OK)]
 	public async Task<IActionResult> Refresh(CancellationToken ct)
 		=> Ok(await Service.RefreshAsync(ct));
+
+	[HttpGet("graph")]
+	[ProducesResponseType(typeof(DocGraphDto), StatusCodes.Status200OK)]
+	public async Task<IActionResult> GetGraph(CancellationToken ct)
+		=> Ok(await Service.GetGraphAsync(ct));
 }
