@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Waao.Domain.Models.Entities;
+using Waao.Domain.Models.Entities.Calendar;
 using Waao.Domain.Models.Entities.Kanban;
 
 namespace Waao.Infra.EF;
@@ -24,6 +25,11 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 	public DbSet<ChallengeQuestion> ChallengeQuestions => Set<ChallengeQuestion>();
 	public DbSet<ChallengeAttempt> ChallengeAttempts => Set<ChallengeAttempt>();
 	public DbSet<ChallengeAttemptAnswer> ChallengeAttemptAnswers => Set<ChallengeAttemptAnswer>();
+
+	// Calendar
+	public DbSet<Calendar> Calendars => Set<Calendar>();
+	public DbSet<CalendarEvent> CalendarEvents => Set<CalendarEvent>();
+	public DbSet<EventOccurrenceOverride> EventOccurrenceOverrides => Set<EventOccurrenceOverride>();
 
 	// Kanban
 	public DbSet<Board> Boards => Set<Board>();
