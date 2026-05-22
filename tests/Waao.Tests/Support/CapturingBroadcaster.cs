@@ -11,7 +11,7 @@ public sealed class CapturingBroadcaster : INotificationBroadcaster
 {
 	private readonly List<(Guid RecipientId, NotificationDto Dto)> _calls = [];
 
-	public IReadOnlyList<(Guid RecipientId, NotificationDto Dto)> Calls => _calls;
+	public List<(Guid RecipientId, NotificationDto Dto)> Calls => _calls;
 
 	public Task BroadcastAsync(Guid recipientId, NotificationDto dto, CancellationToken ct = default)
 	{
