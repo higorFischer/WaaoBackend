@@ -10,6 +10,8 @@ public class Meeting : Entity
 	public Guid OrganizerId { get; set; }
 	public virtual Collaborator Organizer { get; set; } = null!;
 
+	public bool TranscriptionEnabled { get; set; } = false;
+
 	public virtual ICollection<MeetingAttendee> Attendees { get; set; } = [];
 	public virtual ICollection<MeetingAgendaItem> AgendaItems { get; set; } = [];
 }

@@ -22,6 +22,10 @@ public class MeetingConfiguration : IEntityTypeConfiguration<Meeting>
 			.HasForeignKey(x => x.OrganizerId)
 			.OnDelete(DeleteBehavior.Restrict);
 
+		builder.Property(x => x.TranscriptionEnabled)
+			.IsRequired()
+			.HasDefaultValue(false);
+
 		// Unique: one meeting per calendar event (when not deleted)
 		builder.HasIndex(x => x.CalendarEventId)
 			.IsUnique()
