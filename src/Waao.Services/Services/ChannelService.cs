@@ -1,0 +1,514 @@
+using Microsoft.EntityFrameworkCore;
+using Waao.Domain.Models.Entities.Messaging;
+using Waao.Domain.Models.Enums;
+using Waao.Infra.EF;
+using Waao.Services.Abstractions.Dtos.Messaging;
+using Waao.Services.Abstractions.Services;
+
+namespace Waao.Services.Services;
+
+public sealed class ChannelService(WaaoDbContext Db) : IChannelService
+{
+	// =====================================================================
+	// LIST MY CHANNELS
+	// =====================================================================
+
+	public async Task<IReadOnlyList<ChannelDto>> ListMyChannelsAsync(Guid collaboratorId, CancellationToken ct = default)
+	{
+		var memberships = await Db.ChannelMembers
+			.Include(m => m.Channel)
+			.Where(m => m.CollaboratorId == collaboratorId)
+			.ToListAsync(ct);
+
+		var channelIds = memberships.Select(m => m.ChannelId).ToList();
+
+		// Last message per channel
+		var lastMessages = await Db.Messages
+			.Where(msg => channelIds.Contains(msg.ChannelId))
+			.GroupBy(msg => msg.ChannelId)
+			.Select(g => new
+			{
+				ChannelId = g.Key,
+				Body = g.OrderByDescending(m => m.CreatedAt).First().Body,
+				CreatedAt = g.OrderByDescending(m => m.CreatedAt).First().CreatedAt,
+			})
+			.ToListAsync(ct);
+
+		// Member counts
+		var memberCounts = await Db.ChannelMembers
+			.Where(m => channelIds.Contains(m.ChannelId))
+			.GroupBy(m => m.ChannelId)
+			.Select(g => new { ChannelId = g.Key, Count = g.Count() })
+			.ToListAsync(ct);
+
+		var dtos = new List<ChannelDto>();
+		foreach (var membership in memberships)
+		{
+			var channel = membership.Channel;
+			var lastMsg = lastMessages.FirstOrDefault(l => l.ChannelId == channel.Id);
+			var memberCount = memberCounts.FirstOrDefault(c => c.ChannelId == channel.Id)?.Count ?? 0;
+
+			// Unread count: messages after LastReadMessageId
+			int unreadCount = 0;
+			if (membership.LastReadMessageId is null)
+			{
+				unreadCount = await Db.Messages.CountAsync(m => m.ChannelId == channel.Id, ct);
+			}
+			else
+			{
+				var lastRead = await Db.Messages.IgnoreQueryFilters()
+					.Where(m => m.Id == membership.LastReadMessageId)
+					.Select(m => (DateTime?)m.CreatedAt)
+					.FirstOrDefaultAsync(ct);
+
+				if (lastRead.HasValue)
+					unreadCount = await Db.Messages.CountAsync(m => m.ChannelId == channel.Id && m.CreatedAt > lastRead.Value, ct);
+			}
+
+			// For DMs: get the other member
+			ChannelMemberDto? otherMember = null;
+			if (channel.Kind == ChannelKind.DirectMessage)
+			{
+				var other = await Db.ChannelMembers
+					.Include(m => m.Collaborator)
+					.Where(m => m.ChannelId == channel.Id && m.CollaboratorId != collaboratorId)
+					.FirstOrDefaultAsync(ct);
+
+				if (other is not null)
+				{
+					otherMember = new ChannelMemberDto
+					{
+						CollaboratorId = other.CollaboratorId,
+						CollaboratorName = other.Collaborator.FullName,
+						CollaboratorPhotoUrl = other.Collaborator.PhotoUrl,
+						JoinedAt = other.JoinedAt,
+					};
+				}
+			}
+
+			dtos.Add(new ChannelDto
+			{
+				Id = channel.Id,
+				Name = channel.Name,
+				Description = channel.Description,
+				Kind = channel.Kind,
+				Scope = channel.Scope,
+				DepartmentId = channel.DepartmentId,
+				MemberCount = memberCount,
+				IsMember = true,
+				UnreadCount = unreadCount,
+				LastMessagePreview = lastMsg?.Body is { } b ? (b.Length > 80 ? b[..80] + "…" : b) : null,
+				LastMessageAtUtc = lastMsg?.CreatedAt,
+				OtherMember = otherMember,
+			});
+		}
+
+		return dtos.OrderByDescending(d => d.LastMessageAtUtc ?? DateTime.MinValue).ToList();
+	}
+
+	// =====================================================================
+	// LIST PUBLIC CHANNELS
+	// =====================================================================
+
+	public async Task<IReadOnlyList<ChannelDto>> ListPublicChannelsAsync(Guid collaboratorId, CancellationToken ct = default)
+	{
+		var myChannelIds = await Db.ChannelMembers
+			.Where(m => m.CollaboratorId == collaboratorId)
+			.Select(m => m.ChannelId)
+			.ToListAsync(ct);
+
+		var channels = await Db.Channels
+			.Where(c => c.Kind == ChannelKind.Public && !myChannelIds.Contains(c.Id))
+			.ToListAsync(ct);
+
+		var channelIds = channels.Select(c => c.Id).ToList();
+
+		var memberCounts = await Db.ChannelMembers
+			.Where(m => channelIds.Contains(m.ChannelId))
+			.GroupBy(m => m.ChannelId)
+			.Select(g => new { ChannelId = g.Key, Count = g.Count() })
+			.ToListAsync(ct);
+
+		return channels.Select(c => new ChannelDto
+		{
+			Id = c.Id,
+			Name = c.Name,
+			Description = c.Description,
+			Kind = c.Kind,
+			Scope = c.Scope,
+			DepartmentId = c.DepartmentId,
+			MemberCount = memberCounts.FirstOrDefault(x => x.ChannelId == c.Id)?.Count ?? 0,
+			IsMember = false,
+			UnreadCount = 0,
+		}).ToList();
+	}
+
+	// =====================================================================
+	// CREATE CHANNEL
+	// =====================================================================
+
+	public async Task<ChannelDto> CreateChannelAsync(CreateChannelDto dto, Guid creatorId, CancellationToken ct = default)
+	{
+		var channel = new Channel
+		{
+			Id = Guid.CreateVersion7(),
+			Name = dto.Name,
+			Description = dto.Description,
+			Kind = dto.Kind,
+			Scope = ChannelScope.Custom,
+			CreatedById = creatorId,
+			CreatedAt = DateTime.UtcNow,
+		};
+		Db.Channels.Add(channel);
+
+		// Add creator as member
+		var memberIds = dto.InitialMemberIds
+			.Append(creatorId)
+			.Distinct()
+			.ToList();
+
+		foreach (var memberId in memberIds)
+		{
+			Db.ChannelMembers.Add(new ChannelMember
+			{
+				Id = Guid.CreateVersion7(),
+				ChannelId = channel.Id,
+				CollaboratorId = memberId,
+				JoinedAt = DateTime.UtcNow,
+				CreatedAt = DateTime.UtcNow,
+			});
+		}
+
+		await Db.SaveChangesAsync(ct);
+
+		return await BuildChannelDtoAsync(channel.Id, creatorId, ct);
+	}
+
+	// =====================================================================
+	// JOIN
+	// =====================================================================
+
+	public async Task<ChannelDto> JoinAsync(Guid channelId, Guid collaboratorId, CancellationToken ct = default)
+	{
+		var channel = await Db.Channels.FirstOrDefaultAsync(c => c.Id == channelId, ct)
+			?? throw new KeyNotFoundException($"Channel {channelId} not found.");
+
+		if (channel.Kind == ChannelKind.Private)
+			throw new UnauthorizedAccessException("Cannot join a private channel directly. Ask a member to add you.");
+
+		if (channel.Kind == ChannelKind.DirectMessage)
+			throw new UnauthorizedAccessException("Cannot join a DM channel directly.");
+
+		var existing = await Db.ChannelMembers.IgnoreQueryFilters()
+			.FirstOrDefaultAsync(m => m.ChannelId == channelId && m.CollaboratorId == collaboratorId, ct);
+
+		if (existing is not null)
+		{
+			if (existing.IsDeleted)
+			{
+				existing.IsDeleted = false;
+				existing.DeletedAt = null;
+				existing.JoinedAt = DateTime.UtcNow;
+				existing.UpdatedAt = DateTime.UtcNow;
+				await Db.SaveChangesAsync(ct);
+			}
+
+			return await BuildChannelDtoAsync(channelId, collaboratorId, ct);
+		}
+
+		Db.ChannelMembers.Add(new ChannelMember
+		{
+			Id = Guid.CreateVersion7(),
+			ChannelId = channelId,
+			CollaboratorId = collaboratorId,
+			JoinedAt = DateTime.UtcNow,
+			CreatedAt = DateTime.UtcNow,
+		});
+
+		await Db.SaveChangesAsync(ct);
+
+		return await BuildChannelDtoAsync(channelId, collaboratorId, ct);
+	}
+
+	// =====================================================================
+	// LEAVE
+	// =====================================================================
+
+	public async Task LeaveAsync(Guid channelId, Guid collaboratorId, CancellationToken ct = default)
+	{
+		var member = await Db.ChannelMembers
+			.FirstOrDefaultAsync(m => m.ChannelId == channelId && m.CollaboratorId == collaboratorId, ct)
+			?? throw new KeyNotFoundException($"You are not a member of channel {channelId}.");
+
+		member.IsDeleted = true;
+		member.DeletedAt = DateTime.UtcNow;
+
+		await Db.SaveChangesAsync(ct);
+	}
+
+	// =====================================================================
+	// ADD MEMBER
+	// =====================================================================
+
+	public async Task<ChannelDto> AddMemberAsync(Guid channelId, Guid collaboratorId, Guid actorId, CancellationToken ct = default)
+	{
+		// Actor must be a member
+		var actorMembership = await Db.ChannelMembers
+			.AnyAsync(m => m.ChannelId == channelId && m.CollaboratorId == actorId, ct);
+
+		if (!actorMembership)
+			throw new UnauthorizedAccessException($"You must be a member of channel {channelId} to add others.");
+
+		var channel = await Db.Channels.FirstOrDefaultAsync(c => c.Id == channelId, ct)
+			?? throw new KeyNotFoundException($"Channel {channelId} not found.");
+
+		// Check if already a member (re-activate if soft-deleted)
+		var existing = await Db.ChannelMembers.IgnoreQueryFilters()
+			.FirstOrDefaultAsync(m => m.ChannelId == channelId && m.CollaboratorId == collaboratorId, ct);
+
+		if (existing is not null)
+		{
+			if (existing.IsDeleted)
+			{
+				existing.IsDeleted = false;
+				existing.DeletedAt = null;
+				existing.JoinedAt = DateTime.UtcNow;
+				existing.UpdatedAt = DateTime.UtcNow;
+				await Db.SaveChangesAsync(ct);
+			}
+
+			return await BuildChannelDtoAsync(channelId, actorId, ct);
+		}
+
+		Db.ChannelMembers.Add(new ChannelMember
+		{
+			Id = Guid.CreateVersion7(),
+			ChannelId = channelId,
+			CollaboratorId = collaboratorId,
+			JoinedAt = DateTime.UtcNow,
+			CreatedAt = DateTime.UtcNow,
+		});
+
+		await Db.SaveChangesAsync(ct);
+
+		return await BuildChannelDtoAsync(channelId, actorId, ct);
+	}
+
+	// =====================================================================
+	// OPEN DIRECT MESSAGE (find-or-create, never duplicate)
+	// =====================================================================
+
+	public async Task<ChannelDto> OpenDirectMessageAsync(Guid otherCollaboratorId, Guid callerId, CancellationToken ct = default)
+	{
+		// Find any existing DM between the two collaborators
+		// A DM channel is a DirectMessage kind with exactly both as members
+		var callerDmChannelIds = await Db.ChannelMembers
+			.Include(m => m.Channel)
+			.Where(m => m.CollaboratorId == callerId && m.Channel.Kind == ChannelKind.DirectMessage)
+			.Select(m => m.ChannelId)
+			.ToListAsync(ct);
+
+		if (callerDmChannelIds.Count > 0)
+		{
+			var existingDmId = await Db.ChannelMembers
+				.Where(m => callerDmChannelIds.Contains(m.ChannelId) && m.CollaboratorId == otherCollaboratorId)
+				.Select(m => (Guid?)m.ChannelId)
+				.FirstOrDefaultAsync(ct);
+
+			if (existingDmId.HasValue)
+				return await BuildChannelDtoAsync(existingDmId.Value, callerId, ct);
+		}
+
+		// Create new DM channel
+		var channel = new Channel
+		{
+			Id = Guid.CreateVersion7(),
+			Kind = ChannelKind.DirectMessage,
+			Scope = ChannelScope.Custom,
+			CreatedById = callerId,
+			CreatedAt = DateTime.UtcNow,
+		};
+		Db.Channels.Add(channel);
+
+		Db.ChannelMembers.Add(new ChannelMember
+		{
+			Id = Guid.CreateVersion7(),
+			ChannelId = channel.Id,
+			CollaboratorId = callerId,
+			JoinedAt = DateTime.UtcNow,
+			CreatedAt = DateTime.UtcNow,
+		});
+
+		Db.ChannelMembers.Add(new ChannelMember
+		{
+			Id = Guid.CreateVersion7(),
+			ChannelId = channel.Id,
+			CollaboratorId = otherCollaboratorId,
+			JoinedAt = DateTime.UtcNow,
+			CreatedAt = DateTime.UtcNow,
+		});
+
+		await Db.SaveChangesAsync(ct);
+
+		return await BuildChannelDtoAsync(channel.Id, callerId, ct);
+	}
+
+	// =====================================================================
+	// MARK READ
+	// =====================================================================
+
+	public async Task MarkReadAsync(Guid channelId, MarkReadDto dto, Guid collaboratorId, CancellationToken ct = default)
+	{
+		var member = await Db.ChannelMembers
+			.FirstOrDefaultAsync(m => m.ChannelId == channelId && m.CollaboratorId == collaboratorId, ct)
+			?? throw new UnauthorizedAccessException($"You are not a member of channel {channelId}.");
+
+		member.LastReadMessageId = dto.LastReadMessageId;
+		member.UpdatedAt = DateTime.UtcNow;
+
+		await Db.SaveChangesAsync(ct);
+	}
+
+	// =====================================================================
+	// GET MEMBERS
+	// =====================================================================
+
+	public async Task<IReadOnlyList<ChannelMemberDto>> GetMembersAsync(Guid channelId, Guid callerId, CancellationToken ct = default)
+	{
+		var isMember = await Db.ChannelMembers
+			.AnyAsync(m => m.ChannelId == channelId && m.CollaboratorId == callerId, ct);
+
+		if (!isMember)
+			throw new UnauthorizedAccessException($"You are not a member of channel {channelId}.");
+
+		return await Db.ChannelMembers
+			.Include(m => m.Collaborator)
+			.Where(m => m.ChannelId == channelId)
+			.Select(m => new ChannelMemberDto
+			{
+				CollaboratorId = m.CollaboratorId,
+				CollaboratorName = m.Collaborator.FullName,
+				CollaboratorPhotoUrl = m.Collaborator.PhotoUrl,
+				JoinedAt = m.JoinedAt,
+			})
+			.ToListAsync(ct);
+	}
+
+	// =====================================================================
+	// INTERNAL HELPER: create channel (used by seed)
+	// =====================================================================
+
+	public async Task<Channel> CreateChannelEntityAsync(
+		string? name,
+		ChannelKind kind,
+		ChannelScope scope,
+		Guid creatorId,
+		Guid? departmentId,
+		IEnumerable<Guid> memberIds,
+		CancellationToken ct = default)
+	{
+		var channel = new Channel
+		{
+			Id = Guid.CreateVersion7(),
+			Name = name,
+			Kind = kind,
+			Scope = scope,
+			DepartmentId = departmentId,
+			CreatedById = creatorId,
+			CreatedAt = DateTime.UtcNow,
+		};
+		Db.Channels.Add(channel);
+
+		foreach (var memberId in memberIds.Distinct())
+		{
+			Db.ChannelMembers.Add(new ChannelMember
+			{
+				Id = Guid.CreateVersion7(),
+				ChannelId = channel.Id,
+				CollaboratorId = memberId,
+				JoinedAt = DateTime.UtcNow,
+				CreatedAt = DateTime.UtcNow,
+			});
+		}
+
+		await Db.SaveChangesAsync(ct);
+		return channel;
+	}
+
+	// =====================================================================
+	// HELPERS
+	// =====================================================================
+
+	private async Task<ChannelDto> BuildChannelDtoAsync(Guid channelId, Guid callerId, CancellationToken ct)
+	{
+		var channel = await Db.Channels.FirstAsync(c => c.Id == channelId, ct);
+
+		var members = await Db.ChannelMembers
+			.Include(m => m.Collaborator)
+			.Where(m => m.ChannelId == channelId)
+			.ToListAsync(ct);
+
+		var callerMembership = members.FirstOrDefault(m => m.CollaboratorId == callerId);
+		var isMember = callerMembership is not null;
+
+		// Unread count
+		int unreadCount = 0;
+		if (isMember)
+		{
+			if (callerMembership!.LastReadMessageId is null)
+			{
+				unreadCount = await Db.Messages.CountAsync(m => m.ChannelId == channelId, ct);
+			}
+			else
+			{
+				var lastRead = await Db.Messages.IgnoreQueryFilters()
+					.Where(m => m.Id == callerMembership.LastReadMessageId)
+					.Select(m => (DateTime?)m.CreatedAt)
+					.FirstOrDefaultAsync(ct);
+
+				if (lastRead.HasValue)
+					unreadCount = await Db.Messages.CountAsync(m => m.ChannelId == channelId && m.CreatedAt > lastRead.Value, ct);
+			}
+		}
+
+		// Last message
+		var lastMsg = await Db.Messages
+			.Where(m => m.ChannelId == channelId)
+			.OrderByDescending(m => m.CreatedAt)
+			.Select(m => new { m.Body, m.CreatedAt })
+			.FirstOrDefaultAsync(ct);
+
+		// DM: other member
+		ChannelMemberDto? otherMember = null;
+		if (channel.Kind == ChannelKind.DirectMessage)
+		{
+			var other = members.FirstOrDefault(m => m.CollaboratorId != callerId);
+			if (other is not null)
+			{
+				otherMember = new ChannelMemberDto
+				{
+					CollaboratorId = other.CollaboratorId,
+					CollaboratorName = other.Collaborator.FullName,
+					CollaboratorPhotoUrl = other.Collaborator.PhotoUrl,
+					JoinedAt = other.JoinedAt,
+				};
+			}
+		}
+
+		return new ChannelDto
+		{
+			Id = channel.Id,
+			Name = channel.Name,
+			Description = channel.Description,
+			Kind = channel.Kind,
+			Scope = channel.Scope,
+			DepartmentId = channel.DepartmentId,
+			MemberCount = members.Count,
+			IsMember = isMember,
+			UnreadCount = unreadCount,
+			LastMessagePreview = lastMsg?.Body is { } b ? (b.Length > 80 ? b[..80] + "…" : b) : null,
+			LastMessageAtUtc = lastMsg?.CreatedAt,
+			OtherMember = otherMember,
+		};
+	}
+}
