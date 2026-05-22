@@ -245,7 +245,7 @@ public sealed class MeetingService(
 		}
 
 		// Soft-delete backing event
-		var evt = meeting.CalendarEvent;
+		var evt = meeting.CalendarEvent!;
 		evt.IsDeleted = true;
 		evt.DeletedAt = DateTime.UtcNow;
 

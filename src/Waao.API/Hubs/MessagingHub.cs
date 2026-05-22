@@ -22,6 +22,9 @@ public class MessagingHub(WaaoDbContext Db) : Hub
 		foreach (var channelId in channelIds)
 			await Groups.AddToGroupAsync(Context.ConnectionId, GroupName(channelId));
 
+		// Add the connection to the per-user group for personal notifications
+		await Groups.AddToGroupAsync(Context.ConnectionId, UserGroupName(callerId));
+
 		await base.OnConnectedAsync();
 	}
 
@@ -42,6 +45,7 @@ public class MessagingHub(WaaoDbContext Db) : Hub
 		=> await Groups.RemoveFromGroupAsync(Context.ConnectionId, GroupName(channelId));
 
 	public static string GroupName(Guid channelId) => $"channel:{channelId}";
+	public static string UserGroupName(Guid collaboratorId) => $"user:{collaboratorId}";
 
 	private Guid GetCallerId()
 	{

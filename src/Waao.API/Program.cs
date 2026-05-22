@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Waao.API.Hubs;
 using Waao.API.Middleware;
+using Waao.API.Notifications;
 using Waao.Domain.Models.Enums;
 using Waao.Infra.EF;
 using Waao.Infra.EF.Seeds;
@@ -106,6 +107,10 @@ builder.Services.AddScoped<IMeetingService, Waao.Services.Services.MeetingServic
 builder.Services.AddScoped<IChannelService, ChannelService>();
 builder.Services.AddScoped<IMessageService, MessageService>();
 builder.Services.AddSignalR();
+
+// Notifications
+builder.Services.AddScoped<INotificationBroadcaster, SignalRNotificationBroadcaster>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // Documentation viewer (clones WaaoDocs locally + serves to frontend)
 builder.Services.Configure<Waao.Services.Documentation.DocumentationOptions>(builder.Configuration.GetSection("Documentation"));
