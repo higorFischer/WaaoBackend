@@ -21,7 +21,7 @@ public class CalendarMeetingIntegrationTests
 		var calSvc = new CalendarService(db);
 		var expander = new RecurrenceExpander();
 		var evtSvc = new CalendarEventService(db, expander, calSvc);
-		var meetingSvc = new MeetingService(db, calSvc, NullNotificationService.Instance, NullJaasTokenService.Instance, Options.Create(new JaasOptions()));
+		var meetingSvc = new MeetingService(db, calSvc, NullNotificationService.Instance, NullLiveKitTokenService.Instance, Options.Create(new LiveKitOptions()));
 		return (meetingSvc, evtSvc, calSvc, db);
 	}
 

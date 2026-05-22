@@ -29,7 +29,7 @@ public class EventWiringTests
 		var chSvc = new ChannelService(db, notifSvc);
 		var msgSvc = new MessageService(db, notifSvc);
 		var calSvc = new CalendarService(db);
-		var meetingSvc = new MeetingService(db, calSvc, notifSvc, NullJaasTokenService.Instance, Options.Create(new JaasOptions()));
+		var meetingSvc = new MeetingService(db, calSvc, notifSvc, NullLiveKitTokenService.Instance, Options.Create(new LiveKitOptions()));
 		return (msgSvc, chSvc, meetingSvc, notifSvc, broadcaster, db);
 	}
 

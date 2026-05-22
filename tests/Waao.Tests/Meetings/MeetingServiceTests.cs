@@ -20,7 +20,7 @@ public class MeetingServiceTests
 	{
 		var db = TestDb.New();
 		var calSvc = new CalendarService(db);
-		var svc = new MeetingService(db, calSvc, NullNotificationService.Instance, NullJaasTokenService.Instance, Options.Create(new JaasOptions()));
+		var svc = new MeetingService(db, calSvc, NullNotificationService.Instance, NullLiveKitTokenService.Instance, Options.Create(new LiveKitOptions()));
 		return (svc, db);
 	}
 

@@ -17,8 +17,8 @@ public class MeetingVideoTokenTests
 	{
 		var db = TestDb.New();
 		var calSvc = new CalendarService(db);
-		// Use NullJaasTokenService — we're testing access control, not JWT signing
-		var svc = new MeetingService(db, calSvc, NullNotificationService.Instance, NullJaasTokenService.Instance, Options.Create(new JaasOptions { AppId = "test-app" }));
+		// Use NullLiveKitTokenService — we're testing access control, not JWT signing
+		var svc = new MeetingService(db, calSvc, NullNotificationService.Instance, NullLiveKitTokenService.Instance, Options.Create(new LiveKitOptions { Url = "wss://test.invalid", ApiKey = "key", ApiSecret = "secret" }));
 		return (svc, db);
 	}
 
@@ -107,9 +107,9 @@ public class MeetingVideoTokenTests
 		var result = await svc.GetVideoTokenAsync(meetingId, organizerId);
 
 		result.Should().NotBeNull();
-		result.AppId.Should().Be("test-app");
+		result.Url.Should().Be("wss://test.invalid");
 		result.Room.Should().Be($"waao-{meetingId:N}");
-		// NullJaasTokenService always returns "test-jwt-token"
+		// NullLiveKitTokenService always returns "test-jwt-token"
 		result.Token.Should().Be("test-jwt-token");
 	}
 
@@ -156,39 +156,40 @@ public class MeetingVideoTokenTests
 	[Fact]
 	public async Task GetVideoToken_Organizer_ModeratorFlagIsTrue_ViaRealTokenService()
 	{
-		// Use a real JaasTokenService with a throwaway RSA key to verify moderator flag
-		using var rsa = System.Security.Cryptography.RSA.Create(2048);
-		var privatePem = rsa.ExportRSAPrivateKeyPem();
+		// Use a real LiveKitTokenService with a throwaway HMAC secret to verify moderator flag
+		const string testSecret = "test-secret-must-be-at-least-32-chars!!";
 
 		var db = TestDb.New();
 		var calSvc = new CalendarService(db);
-		var options = Options.Create(new JaasOptions
+		var options = Options.Create(new LiveKitOptions
 		{
-			AppId = "test-app",
-			KeyId = "test-app/key1",
-			PrivateKey = privatePem,
+			Url = "wss://test.invalid",
+			ApiKey = "test-key",
+			ApiSecret = testSecret,
 		});
-		var jaasTokenSvc = new JaasTokenService(options);
-		var svc = new MeetingService(db, calSvc, NullNotificationService.Instance, jaasTokenSvc, options);
+		var liveKitTokenSvc = new LiveKitTokenService(options);
+		var svc = new MeetingService(db, calSvc, NullNotificationService.Instance, liveKitTokenSvc, options);
 
 		var organizerId = await SeedCollaborator(db, "Organizer");
 		var attendeeId = await SeedCollaborator(db, "Attendee");
 		var meetingId = await SeedMeetingWithAttendees(db, organizerId, attendeeId);
 
-		// Organizer gets moderator=true in JWT
+		// Organizer gets moderator=true in JWT metadata
 		var organizerResult = await svc.GetVideoTokenAsync(meetingId, organizerId);
 		var organizerJwt = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler()
 			.ReadJwtToken(organizerResult.Token);
-		var contextJson = System.Text.Json.JsonSerializer.Serialize(organizerJwt.Payload["context"]);
-		var doc = System.Text.Json.JsonDocument.Parse(contextJson);
-		doc.RootElement.GetProperty("user").GetProperty("moderator").GetBoolean().Should().BeTrue("organizer must be moderator");
+		var metadataJson = organizerJwt.Payload["metadata"]?.ToString()
+			?? throw new InvalidOperationException("metadata claim missing");
+		var doc = System.Text.Json.JsonDocument.Parse(metadataJson);
+		doc.RootElement.GetProperty("moderator").GetBoolean().Should().BeTrue("organizer must be moderator");
 
-		// Attendee gets moderator=false in JWT
+		// Attendee gets moderator=false in JWT metadata
 		var attendeeResult = await svc.GetVideoTokenAsync(meetingId, attendeeId);
 		var attendeeJwt = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler()
 			.ReadJwtToken(attendeeResult.Token);
-		var attendeeContextJson = System.Text.Json.JsonSerializer.Serialize(attendeeJwt.Payload["context"]);
-		var attendeeDoc = System.Text.Json.JsonDocument.Parse(attendeeContextJson);
-		attendeeDoc.RootElement.GetProperty("user").GetProperty("moderator").GetBoolean().Should().BeFalse("attendee must not be moderator");
+		var attendeeMetadataJson = attendeeJwt.Payload["metadata"]?.ToString()
+			?? throw new InvalidOperationException("metadata claim missing");
+		var attendeeDoc = System.Text.Json.JsonDocument.Parse(attendeeMetadataJson);
+		attendeeDoc.RootElement.GetProperty("moderator").GetBoolean().Should().BeFalse("attendee must not be moderator");
 	}
 }
