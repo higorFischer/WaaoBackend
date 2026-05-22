@@ -4,6 +4,7 @@ using Waao.Domain.Models.Entities.Calendar;
 using Waao.Domain.Models.Entities.Kanban;
 using Waao.Domain.Models.Entities.Meetings;
 using Waao.Domain.Models.Entities.Messaging;
+using Waao.Domain.Models.Entities.Notifications;
 
 namespace Waao.Infra.EF;
 
@@ -42,6 +43,10 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 	public DbSet<Channel> Channels => Set<Channel>();
 	public DbSet<ChannelMember> ChannelMembers => Set<ChannelMember>();
 	public DbSet<Message> Messages => Set<Message>();
+	public DbSet<MessageMention> MessageMentions => Set<MessageMention>();
+
+	// Notifications
+	public DbSet<Notification> Notifications => Set<Notification>();
 
 	// Kanban
 	public DbSet<Board> Boards => Set<Board>();
