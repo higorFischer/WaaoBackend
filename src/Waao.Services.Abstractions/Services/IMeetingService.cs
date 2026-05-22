@@ -34,4 +34,11 @@ public interface IMeetingService
 	/// Moderator flag is true only for the organizer.
 	/// </summary>
 	Task<MeetingVideoTokenDto> GetVideoTokenAsync(Guid meetingId, Guid callerId, CancellationToken ct = default);
+
+	/// <summary>
+	/// Returns whether transcription is enabled for the given meeting.
+	/// Throws KeyNotFoundException if the meeting does not exist.
+	/// Intended for the LiveKit agent worker (authenticated via X-Transcription-Key).
+	/// </summary>
+	Task<TranscriptionEnabledDto> GetTranscriptionEnabledAsync(Guid meetingId, CancellationToken ct = default);
 }

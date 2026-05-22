@@ -56,6 +56,7 @@ public sealed class MeetingService(
 			Id = Guid.CreateVersion7(),
 			CalendarEventId = calEvent.Id,
 			OrganizerId = organizerId,
+			TranscriptionEnabled = dto.TranscriptionEnabled,
 			CreatedAt = DateTime.UtcNow,
 		};
 		Db.Meetings.Add(meeting);
@@ -147,6 +148,7 @@ public sealed class MeetingService(
 		evt.RecurrenceRule = dto.RecurrenceRule;
 		evt.RecurrenceEndUtc = dto.RecurrenceEndUtc;
 		evt.UpdatedAt = DateTime.UtcNow;
+		meeting.TranscriptionEnabled = dto.TranscriptionEnabled;
 		meeting.UpdatedAt = DateTime.UtcNow;
 
 		// Diff attendees
@@ -363,6 +365,21 @@ public sealed class MeetingService(
 	}
 
 	// =====================================================================
+	// TRANSCRIPTION ENABLED
+	// =====================================================================
+
+	public async Task<TranscriptionEnabledDto> GetTranscriptionEnabledAsync(Guid meetingId, CancellationToken ct = default)
+	{
+		var enabled = await Db.Meetings
+			.Where(m => m.Id == meetingId)
+			.Select(m => (bool?)m.TranscriptionEnabled)
+			.FirstOrDefaultAsync(ct)
+			?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+
+		return new TranscriptionEnabledDto { Enabled = enabled };
+	}
+
+	// =====================================================================
 	// HELPERS
 	// =====================================================================
 
@@ -545,6 +562,7 @@ public sealed class MeetingService(
 			IsAllDay = meeting.CalendarEvent.IsAllDay,
 			RecurrenceRule = meeting.CalendarEvent.RecurrenceRule,
 			IsRecurring = meeting.CalendarEvent.RecurrenceRule is not null,
+			TranscriptionEnabled = meeting.TranscriptionEnabled,
 			Attendees = attendees.Select(a => new MeetingAttendeeDto
 			{
 				Id = a.Id,

@@ -16,6 +16,7 @@ public record MeetingDto
 	public bool IsAllDay { get; init; }
 	public string? RecurrenceRule { get; init; }
 	public bool IsRecurring { get; init; }
+	public bool TranscriptionEnabled { get; init; }
 	public IReadOnlyList<MeetingAttendeeDto> Attendees { get; init; } = [];
 	public IReadOnlyList<MeetingAgendaItemDto> Agenda { get; init; } = [];
 	public RsvpTallyDto RsvpTally { get; init; } = new();
@@ -61,6 +62,7 @@ public record CreateMeetingDto
 	public bool IsAllDay { get; init; }
 	public string? RecurrenceRule { get; init; }
 	public DateTime? RecurrenceEndUtc { get; init; }
+	public bool TranscriptionEnabled { get; init; } = false;
 	public IReadOnlyList<Guid> AttendeeCollaboratorIds { get; init; } = [];
 	public IReadOnlyList<Guid> AttendeeDepartmentIds { get; init; } = [];
 	public IReadOnlyList<CreateAgendaItemDto> Agenda { get; init; } = [];
@@ -83,6 +85,7 @@ public record UpdateMeetingDto
 	public bool IsAllDay { get; init; }
 	public string? RecurrenceRule { get; init; }
 	public DateTime? RecurrenceEndUtc { get; init; }
+	public bool TranscriptionEnabled { get; init; } = false;
 	public IReadOnlyList<Guid> AttendeeCollaboratorIds { get; init; } = [];
 	public IReadOnlyList<Guid> AttendeeDepartmentIds { get; init; } = [];
 	public IReadOnlyList<CreateAgendaItemDto> Agenda { get; init; } = [];
@@ -91,4 +94,9 @@ public record UpdateMeetingDto
 public record SetRsvpDto
 {
 	public MeetingRsvp Rsvp { get; init; }
+}
+
+public record TranscriptionEnabledDto
+{
+	public bool Enabled { get; init; }
 }
