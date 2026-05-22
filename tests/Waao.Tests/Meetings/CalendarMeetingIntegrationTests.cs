@@ -19,7 +19,7 @@ public class CalendarMeetingIntegrationTests
 		var calSvc = new CalendarService(db);
 		var expander = new RecurrenceExpander();
 		var evtSvc = new CalendarEventService(db, expander, calSvc);
-		var meetingSvc = new MeetingService(db, calSvc);
+		var meetingSvc = new MeetingService(db, calSvc, NullNotificationService.Instance);
 		return (meetingSvc, evtSvc, calSvc, db);
 	}
 

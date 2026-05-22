@@ -18,7 +18,7 @@ public class MeetingServiceTests
 	{
 		var db = TestDb.New();
 		var calSvc = new CalendarService(db);
-		var svc = new MeetingService(db, calSvc);
+		var svc = new MeetingService(db, calSvc, NullNotificationService.Instance);
 		return (svc, db);
 	}
 

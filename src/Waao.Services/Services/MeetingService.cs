@@ -11,7 +11,8 @@ namespace Waao.Services.Services;
 
 public sealed class MeetingService(
 	WaaoDbContext Db,
-	ICalendarService CalendarService) : IMeetingService
+	ICalendarService CalendarService,
+	INotificationService NotificationService) : IMeetingService
 {
 	// =====================================================================
 	// CREATE
@@ -75,6 +76,25 @@ public sealed class MeetingService(
 
 		await Db.SaveChangesAsync(ct);
 
+		// Notify attendees (not the organizer) with MeetingInvite
+		var attendeeIds = attendees
+			.Where(a => a.CollaboratorId != organizerId)
+			.Select(a => a.CollaboratorId)
+			.ToList();
+
+		foreach (var attendeeId in attendeeIds)
+		{
+			await NotificationService.CreateAsync(
+				attendeeId,
+				NotificationKind.MeetingInvite,
+				$"You've been invited to \"{dto.Title}\"",
+				$"Meeting starts at {dto.StartsAtUtc:g} UTC.",
+				"meeting",
+				meeting.Id,
+				organizerId,
+				ct);
+		}
+
 		return await BuildDtoAsync(meeting.Id, organizerId, ct);
 	}
 
@@ -127,6 +147,12 @@ public sealed class MeetingService(
 		// Diff attendees
 		await DiffAttendeesAsync(meeting.Id, dto.AttendeeCollaboratorIds, dto.AttendeeDepartmentIds, meeting.OrganizerId, ct);
 
+		// Load current attendees for notification (before diffing)
+		var currentAttendeeIds = await Db.MeetingAttendees
+			.Where(a => a.MeetingId == meeting.Id)
+			.Select(a => a.CollaboratorId)
+			.ToListAsync(ct);
+
 		// Replace agenda items (soft-delete old, add new)
 		var existing = await Db.MeetingAgendaItems
 			.Where(a => a.MeetingId == meeting.Id)
@@ -153,6 +179,20 @@ public sealed class MeetingService(
 
 		await Db.SaveChangesAsync(ct);
 
+		// Notify current attendees (not the actor) with MeetingUpdated
+		foreach (var attendeeId in currentAttendeeIds.Where(id => id != callerId))
+		{
+			await NotificationService.CreateAsync(
+				attendeeId,
+				NotificationKind.MeetingUpdated,
+				$"Meeting \"{dto.Title}\" was updated",
+				$"The meeting details have changed. New time: {dto.StartsAtUtc:g} UTC.",
+				"meeting",
+				meetingId,
+				callerId,
+				ct);
+		}
+
 		return await BuildDtoAsync(meeting.Id, callerId, ct);
 	}
 
@@ -169,6 +209,14 @@ public sealed class MeetingService(
 
 		if (!await CanWriteMeetingAsync(meeting, callerId, ct))
 			throw new UnauthorizedAccessException($"Caller {callerId} cannot cancel meeting {meetingId}.");
+
+		// Capture attendee ids BEFORE soft-delete for notifications
+		var cancelAttendeeIds = await Db.MeetingAttendees
+			.Where(a => a.MeetingId == meetingId)
+			.Select(a => a.CollaboratorId)
+			.ToListAsync(ct);
+
+		var meetingTitle = meeting.CalendarEvent?.Title ?? "meeting";
 
 		// Soft-delete meeting
 		meeting.IsDeleted = true;
@@ -202,6 +250,20 @@ public sealed class MeetingService(
 		evt.DeletedAt = DateTime.UtcNow;
 
 		await Db.SaveChangesAsync(ct);
+
+		// Notify attendees (not the actor) with MeetingCancelled
+		foreach (var attendeeId in cancelAttendeeIds.Where(id => id != callerId))
+		{
+			await NotificationService.CreateAsync(
+				attendeeId,
+				NotificationKind.MeetingCancelled,
+				$"Meeting \"{meetingTitle}\" was cancelled",
+				"The meeting has been cancelled.",
+				"meeting",
+				meetingId,
+				callerId,
+				ct);
+		}
 	}
 
 	// =====================================================================

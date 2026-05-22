@@ -7,7 +7,9 @@ using Waao.Services.Abstractions.Services;
 
 namespace Waao.Services.Services;
 
-public sealed class ChannelService(WaaoDbContext Db) : IChannelService
+public sealed class ChannelService(
+	WaaoDbContext Db,
+	INotificationService NotificationService) : IChannelService
 {
 	// =====================================================================
 	// LIST MY CHANNELS
@@ -290,6 +292,21 @@ public sealed class ChannelService(WaaoDbContext Db) : IChannelService
 		});
 
 		await Db.SaveChangesAsync(ct);
+
+		// Notify the newly added member (ChannelInvite) — skip self-joins (actorId == collaboratorId)
+		if (collaboratorId != actorId)
+		{
+			var channelName = channel.Name ?? "a channel";
+			await NotificationService.CreateAsync(
+				collaboratorId,
+				NotificationKind.ChannelInvite,
+				$"You were added to #{channelName}",
+				$"You've been added to the channel #{channelName}.",
+				"channel",
+				channelId,
+				actorId,
+				ct);
+		}
 
 		return await BuildChannelDtoAsync(channelId, actorId, ct);
 	}

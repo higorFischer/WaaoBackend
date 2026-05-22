@@ -14,7 +14,7 @@ public class ChannelServiceTests
 	private static ChannelService Build(out Waao.Infra.EF.WaaoDbContext db)
 	{
 		db = TestDb.New();
-		return new ChannelService(db);
+		return new ChannelService(db, NullNotificationService.Instance);
 	}
 
 	private static async Task<Guid> SeedCollaborator(Waao.Infra.EF.WaaoDbContext db, string name = "User")

@@ -1,12 +1,17 @@
 using Microsoft.EntityFrameworkCore;
 using Waao.Domain.Models.Entities.Messaging;
+using Waao.Domain.Models.Enums;
 using Waao.Infra.EF;
 using Waao.Services.Abstractions.Dtos.Messaging;
+using Waao.Services.Abstractions.Dtos.Notifications;
 using Waao.Services.Abstractions.Services;
+using Waao.Services.Messaging;
 
 namespace Waao.Services.Services;
 
-public sealed class MessageService(WaaoDbContext Db) : IMessageService
+public sealed class MessageService(
+	WaaoDbContext Db,
+	INotificationService NotificationService) : IMessageService
 {
 	// =====================================================================
 	// GET MESSAGES (with before-cursor pagination)
@@ -62,9 +67,20 @@ public sealed class MessageService(WaaoDbContext Db) : IMessageService
 		// Return oldest-first
 		messages.Reverse();
 
+		// Load mentions for all returned messages
+		var messageIds = messages.Select(m => m.Id).ToList();
+		var mentions = await Db.MessageMentions
+			.Include(mm => mm.MentionedCollaborator)
+			.Where(mm => messageIds.Contains(mm.MessageId))
+			.ToListAsync(ct);
+
+		var mentionsByMessage = mentions
+			.GroupBy(mm => mm.MessageId)
+			.ToDictionary(g => g.Key, g => g.ToList());
+
 		return new MessagePageDto
 		{
-			Messages = messages.Select(MapToDto).ToList(),
+			Messages = messages.Select(m => MapToDto(m, mentionsByMessage.GetValueOrDefault(m.Id))).ToList(),
 			HasMore = hasMore,
 		};
 	}
@@ -100,6 +116,65 @@ public sealed class MessageService(WaaoDbContext Db) : IMessageService
 		Db.Messages.Add(message);
 		await Db.SaveChangesAsync(ct);
 
+		// Parse mentions, filter to channel members (not the author), persist rows + notifications
+		var mentionedIds = MentionParser.ExtractCollaboratorIds(dto.Body);
+		var mentionDtos = new List<MessageMentionDto>();
+
+		if (mentionedIds.Count > 0)
+		{
+			// Get members of this channel
+			var memberIds = await Db.ChannelMembers
+				.Where(m => m.ChannelId == channelId)
+				.Select(m => m.CollaboratorId)
+				.ToListAsync(ct);
+
+			var eligibleIds = mentionedIds
+				.Where(id => id != authorId && memberIds.Contains(id))
+				.ToList();
+
+			foreach (var recipientId in eligibleIds)
+			{
+				var mention = new MessageMention
+				{
+					Id = Guid.CreateVersion7(),
+					MessageId = message.Id,
+					MentionedCollaboratorId = recipientId,
+					CreatedAt = DateTime.UtcNow,
+				};
+				Db.MessageMentions.Add(mention);
+			}
+
+			if (eligibleIds.Count > 0)
+				await Db.SaveChangesAsync(ct);
+
+			// Load mentioned collaborator names for the DTO
+			var mentionedCollaborators = await Db.Collaborators
+				.Where(c => eligibleIds.Contains(c.Id))
+				.Select(c => new { c.Id, c.FullName })
+				.ToListAsync(ct);
+
+			mentionDtos = mentionedCollaborators.Select(c => new MessageMentionDto
+			{
+				MentionedCollaboratorId = c.Id,
+				MentionedCollaboratorName = c.FullName,
+			}).ToList();
+
+			// Emit notifications
+			var bodySnippet = dto.Body.Length > 100 ? dto.Body[..100] + "…" : dto.Body;
+			foreach (var recipientId in eligibleIds)
+			{
+				await NotificationService.CreateAsync(
+					recipientId,
+					NotificationKind.Mention,
+					$"{author.FullName} mentioned you",
+					bodySnippet,
+					"channel",
+					channelId,
+					authorId,
+					ct);
+			}
+		}
+
 		return new MessageDto
 		{
 			Id = message.Id,
@@ -109,6 +184,7 @@ public sealed class MessageService(WaaoDbContext Db) : IMessageService
 			AuthorPhotoUrl = author.PhotoUrl,
 			Body = message.Body,
 			CreatedAtUtc = message.CreatedAt,
+			Mentions = mentionDtos,
 		};
 	}
 
@@ -116,7 +192,7 @@ public sealed class MessageService(WaaoDbContext Db) : IMessageService
 	// HELPERS
 	// =====================================================================
 
-	private static MessageDto MapToDto(Message m) => new()
+	private static MessageDto MapToDto(Message m, List<MessageMention>? mentions) => new()
 	{
 		Id = m.Id,
 		ChannelId = m.ChannelId,
@@ -125,5 +201,10 @@ public sealed class MessageService(WaaoDbContext Db) : IMessageService
 		AuthorPhotoUrl = m.Author.PhotoUrl,
 		Body = m.Body,
 		CreatedAtUtc = m.CreatedAt,
+		Mentions = mentions?.Select(mm => new MessageMentionDto
+		{
+			MentionedCollaboratorId = mm.MentionedCollaboratorId,
+			MentionedCollaboratorName = mm.MentionedCollaborator?.FullName ?? string.Empty,
+		}).ToList() ?? [],
 	};
 }
