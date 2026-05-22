@@ -103,10 +103,14 @@ builder.Services.AddScoped<ICalendarEventService, CalendarEventService>();
 
 // Meetings
 builder.Services.AddScoped<IMeetingService, Waao.Services.Services.MeetingService>();
+builder.Services.AddScoped<IMeetingTranscriptService, Waao.Services.Transcription.MeetingTranscriptService>();
 
 // LiveKit video
 builder.Services.Configure<LiveKitOptions>(builder.Configuration.GetSection("LiveKit"));
 builder.Services.AddSingleton<ILiveKitTokenService, LiveKitTokenService>();
+
+// Transcription
+builder.Services.Configure<Waao.Services.Transcription.TranscriptionOptions>(builder.Configuration.GetSection("Transcription"));
 
 // Messaging
 builder.Services.AddScoped<IChannelService, ChannelService>();
