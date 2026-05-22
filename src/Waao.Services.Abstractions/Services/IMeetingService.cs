@@ -27,4 +27,11 @@ public interface IMeetingService
 
 	/// <summary>Returns meetings the caller organizes or attends, within the given window.</summary>
 	Task<IReadOnlyList<MeetingDto>> ListMyMeetingsAsync(Guid callerId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default);
+
+	/// <summary>
+	/// Mints a JaaS video token for the given meeting.
+	/// Caller must be the organizer or an attendee; else throws KeyNotFoundException (unknown meeting) or UnauthorizedAccessException (not a member).
+	/// Moderator flag is true only for the organizer.
+	/// </summary>
+	Task<MeetingVideoTokenDto> GetVideoTokenAsync(Guid meetingId, Guid callerId, CancellationToken ct = default);
 }

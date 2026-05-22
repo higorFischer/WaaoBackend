@@ -20,6 +20,7 @@ using CalendarEventService = Waao.Services.Services.CalendarEventService;
 using Waao.Services.Gamification;
 using Waao.Services.Services;
 using Waao.Services.Validation;
+using Waao.Services.Video;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -102,6 +103,10 @@ builder.Services.AddScoped<ICalendarEventService, CalendarEventService>();
 
 // Meetings
 builder.Services.AddScoped<IMeetingService, Waao.Services.Services.MeetingService>();
+
+// JaaS video
+builder.Services.Configure<JaasOptions>(builder.Configuration.GetSection("Jaas"));
+builder.Services.AddSingleton<IJaasTokenService, JaasTokenService>();
 
 // Messaging
 builder.Services.AddScoped<IChannelService, ChannelService>();

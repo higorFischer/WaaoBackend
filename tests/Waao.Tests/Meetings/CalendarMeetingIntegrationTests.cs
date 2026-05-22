@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Xunit;
 using Waao.Domain.Models.Entities;
 using Waao.Domain.Models.Enums;
@@ -6,6 +7,7 @@ using Waao.Services.Abstractions.Dtos.Calendar;
 using Waao.Services.Abstractions.Dtos.Meetings;
 using Waao.Services.Calendar;
 using Waao.Services.Services;
+using Waao.Services.Video;
 using Waao.Tests.Support;
 
 namespace Waao.Tests.Meetings;
@@ -19,7 +21,7 @@ public class CalendarMeetingIntegrationTests
 		var calSvc = new CalendarService(db);
 		var expander = new RecurrenceExpander();
 		var evtSvc = new CalendarEventService(db, expander, calSvc);
-		var meetingSvc = new MeetingService(db, calSvc, NullNotificationService.Instance);
+		var meetingSvc = new MeetingService(db, calSvc, NullNotificationService.Instance, NullJaasTokenService.Instance, Options.Create(new JaasOptions()));
 		return (meetingSvc, evtSvc, calSvc, db);
 	}
 

@@ -57,4 +57,11 @@ public class MeetingsController(IMeetingService MeetingService) : ControllerBase
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	public async Task<IActionResult> GetMine([FromQuery] DateTime fromUtc, [FromQuery] DateTime toUtc, CancellationToken ct)
 		=> Ok(await MeetingService.ListMyMeetingsAsync(Me, fromUtc, toUtc, ct));
+
+	[HttpGet("{id:guid}/video-token")]
+	[ProducesResponseType(typeof(MeetingVideoTokenDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> GetVideoToken(Guid id, CancellationToken ct)
+		=> Ok(await MeetingService.GetVideoTokenAsync(id, Me, ct));
 }

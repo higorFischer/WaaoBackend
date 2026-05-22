@@ -1,11 +1,13 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Waao.Domain.Models.Entities;
 using Waao.Domain.Models.Entities.Calendar;
 using Waao.Domain.Models.Enums;
 using Waao.Services.Abstractions.Dtos.Meetings;
 using Waao.Services.Abstractions.Dtos.Messaging;
 using Waao.Services.Services;
+using Waao.Services.Video;
 using Waao.Tests.Support;
 using Xunit;
 
@@ -27,7 +29,7 @@ public class EventWiringTests
 		var chSvc = new ChannelService(db, notifSvc);
 		var msgSvc = new MessageService(db, notifSvc);
 		var calSvc = new CalendarService(db);
-		var meetingSvc = new MeetingService(db, calSvc, notifSvc);
+		var meetingSvc = new MeetingService(db, calSvc, notifSvc, NullJaasTokenService.Instance, Options.Create(new JaasOptions()));
 		return (msgSvc, chSvc, meetingSvc, notifSvc, broadcaster, db);
 	}
 

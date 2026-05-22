@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Xunit;
 using Waao.Domain.Models.Entities;
 using Waao.Domain.Models.Entities.Calendar;
@@ -7,6 +8,7 @@ using Waao.Domain.Models.Entities.Meetings;
 using Waao.Domain.Models.Enums;
 using Waao.Services.Abstractions.Dtos.Meetings;
 using Waao.Services.Services;
+using Waao.Services.Video;
 using Waao.Tests.Support;
 
 namespace Waao.Tests.Meetings;
@@ -18,7 +20,7 @@ public class MeetingServiceTests
 	{
 		var db = TestDb.New();
 		var calSvc = new CalendarService(db);
-		var svc = new MeetingService(db, calSvc, NullNotificationService.Instance);
+		var svc = new MeetingService(db, calSvc, NullNotificationService.Instance, NullJaasTokenService.Instance, Options.Create(new JaasOptions()));
 		return (svc, db);
 	}
 

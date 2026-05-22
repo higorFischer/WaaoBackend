@@ -1,18 +1,23 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Waao.Domain.Models.Entities;
 using Waao.Domain.Models.Entities.Calendar;
 using Waao.Domain.Models.Entities.Meetings;
 using Waao.Domain.Models.Enums;
 using Waao.Infra.EF;
+using Waao.Services.Abstractions.Dtos;
 using Waao.Services.Abstractions.Dtos.Meetings;
 using Waao.Services.Abstractions.Services;
+using Waao.Services.Video;
 
 namespace Waao.Services.Services;
 
 public sealed class MeetingService(
 	WaaoDbContext Db,
 	ICalendarService CalendarService,
-	INotificationService NotificationService) : IMeetingService
+	INotificationService NotificationService,
+	IJaasTokenService JaasTokenService,
+	IOptions<JaasOptions> JaasOptions) : IMeetingService
 {
 	// =====================================================================
 	// CREATE
@@ -317,6 +322,47 @@ public sealed class MeetingService(
 			dtos.Add(await BuildDtoAsync(m.Id, callerId, ct));
 
 		return dtos;
+	}
+
+	// =====================================================================
+	// VIDEO TOKEN
+	// =====================================================================
+
+	public async Task<MeetingVideoTokenDto> GetVideoTokenAsync(Guid meetingId, Guid callerId, CancellationToken ct = default)
+	{
+		var meeting = await Db.Meetings
+			.FirstOrDefaultAsync(m => m.Id == meetingId, ct)
+			?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+
+		var isMember = meeting.OrganizerId == callerId
+			|| await Db.MeetingAttendees.AnyAsync(a => a.MeetingId == meetingId && a.CollaboratorId == callerId, ct);
+
+		if (!isMember)
+			throw new UnauthorizedAccessException($"Caller {callerId} is not a member of meeting {meetingId}.");
+
+		var caller = await Db.Collaborators.FirstOrDefaultAsync(c => c.Id == callerId, ct)
+			?? throw new KeyNotFoundException($"Collaborator {callerId} not found.");
+
+		var moderator = callerId == meeting.OrganizerId;
+		var room = $"waao-{meetingId:N}";
+		var options = JaasOptions.Value;
+
+		var token = JaasTokenService.MintToken(new JaasTokenRequest
+		{
+			CollaboratorId = callerId,
+			Name = caller.FullName,
+			Email = caller.Email,
+			Avatar = caller.PhotoUrl,
+			Room = room,
+			Moderator = moderator,
+		});
+
+		return new MeetingVideoTokenDto
+		{
+			Token = token,
+			AppId = options.AppId,
+			Room = room,
+		};
 	}
 
 	// =====================================================================
