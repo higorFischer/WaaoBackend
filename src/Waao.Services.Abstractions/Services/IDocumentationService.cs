@@ -8,4 +8,5 @@ public interface IDocumentationService
 	Task<DocFileDto?> GetFileAsync(string relativePath, CancellationToken ct = default);
 	Task<IReadOnlyList<DocSearchHitDto>> SearchAsync(string query, int maxResults = 50, CancellationToken ct = default);
 	Task<DocRefreshResultDto> RefreshAsync(CancellationToken ct = default);
+	Task<DocGraphDto> GetGraphAsync(CancellationToken ct = default);
 }

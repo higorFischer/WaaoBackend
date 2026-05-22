@@ -31,3 +31,23 @@ public record DocRefreshResultDto
 	public DateTime PulledAtUtc { get; init; }
 	public int FileCount { get; init; }
 }
+
+public record DocGraphNodeDto
+{
+	public string Id { get; init; } = string.Empty;
+	public string Label { get; init; } = string.Empty;
+	public string Folder { get; init; } = string.Empty;
+	public int LinkCount { get; init; }
+}
+
+public record DocGraphEdgeDto
+{
+	public string Source { get; init; } = string.Empty;
+	public string Target { get; init; } = string.Empty;
+}
+
+public record DocGraphDto
+{
+	public IReadOnlyList<DocGraphNodeDto> Nodes { get; init; } = [];
+	public IReadOnlyList<DocGraphEdgeDto> Edges { get; init; } = [];
+}

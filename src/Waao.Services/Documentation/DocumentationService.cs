@@ -7,6 +7,106 @@ using Waao.Services.Abstractions.Services;
 
 namespace Waao.Services.Documentation;
 
+/// <summary>Testable graph-building logic, independent of the git clone step.</summary>
+public static class DocumentationGraphBuilder
+{
+	private static readonly Regex WikilinkRegex = new(@"\[\[([^\]]+)\]\]", RegexOptions.Compiled);
+
+	public static async Task<DocGraphDto> BuildAsync(string localPath, string[] hiddenFolders, CancellationToken ct)
+	{
+		var rootLen = localPath.TrimEnd('/', '\\').Length + 1;
+
+		// --- enumerate nodes ---
+		var nodes = new List<DocGraphNodeDto>();
+		var pathIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);      // rel-path → rel-path (identity, normalised)
+		var basenameIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);  // lowercased stem → rel-path (last-wins for duplicates)
+
+		foreach (var file in Directory.EnumerateFiles(localPath, "*.md", SearchOption.AllDirectories))
+		{
+			ct.ThrowIfCancellationRequested();
+			if (IsHidden(file, hiddenFolders)) continue;
+
+			var rel = file[rootLen..].Replace('\\', '/');
+			var stem = Path.GetFileNameWithoutExtension(rel);
+			var folder = Path.GetDirectoryName(rel)?.Replace('\\', '/') ?? string.Empty;
+
+			nodes.Add(new DocGraphNodeDto { Id = rel, Label = stem, Folder = folder, LinkCount = 0 });
+			pathIndex[rel] = rel;
+			basenameIndex[stem.ToLowerInvariant()] = rel;
+		}
+
+		// --- enumerate edges ---
+		// Use a HashSet of normalised "source\0target" strings for case-insensitive de-duplication
+		var edgeSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var edgeList = new List<(string Source, string Target)>();
+
+		foreach (var node in nodes)
+		{
+			ct.ThrowIfCancellationRequested();
+			var filePath = Path.Combine(localPath, node.Id.Replace('/', Path.DirectorySeparatorChar));
+			var content = await File.ReadAllTextAsync(filePath, ct);
+
+			foreach (Match m in WikilinkRegex.Matches(content))
+			{
+				var token = m.Groups[1].Value;
+
+				// strip alias after |
+				var pipeIdx = token.IndexOf('|');
+				if (pipeIdx >= 0) token = token[..pipeIdx];
+
+				// strip heading anchor after #
+				var hashIdx = token.IndexOf('#');
+				if (hashIdx >= 0) token = token[..hashIdx];
+
+				token = token.Trim();
+				if (string.IsNullOrEmpty(token)) continue;
+
+				string? resolved;
+				if (token.Contains('/'))
+				{
+					// path-style: try direct match, also try appending .md
+					var candidate = token.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ? token : token + ".md";
+					pathIndex.TryGetValue(candidate, out resolved);
+				}
+				else
+				{
+					basenameIndex.TryGetValue(token.ToLowerInvariant(), out resolved);
+				}
+
+				if (resolved is null) continue;          // unresolved — drop
+				if (string.Equals(resolved, node.Id, StringComparison.OrdinalIgnoreCase)) continue;  // self-link — drop
+
+				var key = $"{node.Id}\0{resolved}";
+				if (edgeSet.Add(key))
+					edgeList.Add((node.Id, resolved));
+			}
+		}
+
+		// --- compute LinkCount ---
+		var linkCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+		foreach (var (src, tgt) in edgeList)
+		{
+			linkCounts[src] = linkCounts.GetValueOrDefault(src) + 1;
+			linkCounts[tgt] = linkCounts.GetValueOrDefault(tgt) + 1;
+		}
+
+		var finalNodes = nodes
+			.Select(n => n with { LinkCount = linkCounts.GetValueOrDefault(n.Id) })
+			.ToList();
+
+		var edges = edgeList
+			.Select(e => new DocGraphEdgeDto { Source = e.Source, Target = e.Target })
+			.ToList();
+
+		return new DocGraphDto { Nodes = finalNodes, Edges = edges };
+	}
+
+	private static bool IsHidden(string path, string[] hiddenFolders)
+		=> hiddenFolders.Any(h =>
+			path.Contains($"{Path.DirectorySeparatorChar}{h}{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+			|| path.EndsWith($"{Path.DirectorySeparatorChar}{h}", StringComparison.OrdinalIgnoreCase));
+}
+
 public record DocumentationOptions
 {
 	public string RemoteUrl { get; init; } = "https://github.com/higorFischer/WaaoDocs.git";
@@ -81,6 +181,12 @@ public class DocumentationService(
 			}
 		}
 		return results;
+	}
+
+	public async Task<DocGraphDto> GetGraphAsync(CancellationToken ct = default)
+	{
+		await EnsureClonedAsync(ct);
+		return await DocumentationGraphBuilder.BuildAsync(Config.LocalPath, Config.HiddenFolders, ct);
 	}
 
 	public async Task<DocRefreshResultDto> RefreshAsync(CancellationToken ct = default)
