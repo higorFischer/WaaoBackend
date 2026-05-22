@@ -10,5 +10,5 @@ namespace Waao.Tests.Support;
 public static class AdminServiceFactory
 {
 	public static AdminService Create(WaaoDbContext db)
-		=> new(db, new StreakTracker(db), new BadgeEvaluator(db), new GamificationEngine(db), new GrantXpValidator());
+		=> new(db, new StreakTracker(db), new BadgeEvaluator(db), new GamificationEngine(db), new GrantXpValidator(), new AdminCreateUserValidator(), new AdminUpdateUserValidator(), new AdminResetPasswordValidator());
 }
