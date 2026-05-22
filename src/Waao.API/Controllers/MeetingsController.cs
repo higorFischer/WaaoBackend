@@ -1,15 +1,20 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Waao.Services.Abstractions.Dtos.Meetings;
 using Waao.Services.Abstractions.Services;
+using Waao.Services.Transcription;
 
 namespace Waao.API.Controllers;
 
 [ApiController]
 [Route("api/waao/meetings")]
 [Authorize]
-public class MeetingsController(IMeetingService MeetingService) : ControllerBase
+public class MeetingsController(
+	IMeetingService MeetingService,
+	IMeetingTranscriptService TranscriptService,
+	IOptions<TranscriptionOptions> TranscriptionOptions) : ControllerBase
 {
 	private Guid Me => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
 		? id : throw new UnauthorizedAccessException("Missing subject claim.");
@@ -64,4 +69,26 @@ public class MeetingsController(IMeetingService MeetingService) : ControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public async Task<IActionResult> GetVideoToken(Guid id, CancellationToken ct)
 		=> Ok(await MeetingService.GetVideoTokenAsync(id, Me, ct));
+
+	[HttpPost("{id:guid}/transcript")]
+	[AllowAnonymous]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> IngestTranscript(Guid id, [FromBody] IngestTranscriptDto dto, CancellationToken ct)
+	{
+		var key = Request.Headers["X-Transcription-Key"].FirstOrDefault();
+		if (string.IsNullOrWhiteSpace(key) || key != TranscriptionOptions.Value.IngestKey)
+			return Unauthorized();
+		await TranscriptService.IngestAsync(id, dto, ct);
+		return NoContent();
+	}
+
+	[HttpGet("{id:guid}/transcript")]
+	[ProducesResponseType(typeof(MeetingTranscriptDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> GetTranscript(Guid id, CancellationToken ct)
+		=> Ok(await TranscriptService.GetAsync(id, Me, ct));
 }
