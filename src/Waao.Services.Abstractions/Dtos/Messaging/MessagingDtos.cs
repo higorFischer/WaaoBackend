@@ -1,4 +1,5 @@
 using Waao.Domain.Models.Enums;
+using Waao.Services.Abstractions.Dtos.Notifications;
 
 namespace Waao.Services.Abstractions.Dtos.Messaging;
 
@@ -35,6 +36,7 @@ public record MessageDto
 	public string? AuthorPhotoUrl { get; init; }
 	public string Body { get; init; } = string.Empty;
 	public DateTime CreatedAtUtc { get; init; }
+	public IReadOnlyList<MessageMentionDto> Mentions { get; init; } = [];
 }
 
 public record CreateChannelDto
