@@ -150,6 +150,26 @@ public sealed class AuthService(
 		await Db.SaveChangesAsync(ct);
 	}
 
+	public async Task<AuthResultDto> RefreshAsync(Guid collaboratorId, CancellationToken ct = default)
+	{
+		var c = await Db.Collaborators
+			.Include(x => x.Department).Include(x => x.Role)
+			.Include(x => x.Manager).Include(x => x.Badges)
+			.FirstOrDefaultAsync(x => x.Id == collaboratorId, ct)
+			?? throw new UnauthorizedAccessException("Collaborator not found.");
+
+		// Sliding session: mint a brand-new token with the current expiry window.
+		// Streak/badges are NOT re-evaluated here — refresh is a token bump only,
+		// not a fresh login.
+		var (token, expires) = Jwt.Issue(c);
+		return new AuthResultDto
+		{
+			Token = token,
+			ExpiresAt = expires,
+			Me = CollaboratorMapper.ToDto(c),
+		};
+	}
+
 	public async Task<CollaboratorDto?> GetMeAsync(Guid collaboratorId, CancellationToken ct = default)
 	{
 		var c = await Db.Collaborators

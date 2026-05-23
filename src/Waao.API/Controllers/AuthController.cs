@@ -51,6 +51,13 @@ public class AuthController(IAuthService Service) : ControllerBase
 		return dto is null ? NotFound() : Ok(dto);
 	}
 
+	[HttpPost("refresh")]
+	[Authorize]
+	[ProducesResponseType(typeof(AuthResultDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+	public async Task<IActionResult> Refresh(CancellationToken ct)
+		=> Ok(await Service.RefreshAsync(CurrentCollaboratorId(), ct));
+
 	[HttpPost("change-password")]
 	[Authorize]
 	[ProducesResponseType(StatusCodes.Status204NoContent)]
