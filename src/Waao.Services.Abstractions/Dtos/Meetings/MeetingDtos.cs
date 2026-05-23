@@ -100,3 +100,25 @@ public record TranscriptionEnabledDto
 {
 	public bool Enabled { get; init; }
 }
+
+/// <summary>Opaque guest link token returned to organizers. Build share URL as: /join/{meetingId}?token={Token}</summary>
+public record GuestLinkDto
+{
+	public string Token { get; init; } = string.Empty;
+}
+
+/// <summary>Payload posted by an external guest to receive a LiveKit token.</summary>
+public record GuestJoinRequestDto
+{
+	public string Token { get; init; } = string.Empty;
+	public string DisplayName { get; init; } = string.Empty;
+}
+
+/// <summary>LiveKit credentials returned to a guest after a successful join request.</summary>
+public record GuestJoinResultDto
+{
+	public string LiveKitUrl { get; init; } = string.Empty;
+	public string LiveKitToken { get; init; } = string.Empty;
+	public string MeetingTitle { get; init; } = string.Empty;
+	public bool TranscriptionEnabled { get; init; }
+}

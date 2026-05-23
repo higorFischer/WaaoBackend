@@ -81,3 +81,15 @@ internal class AgendaItemValidator : AbstractValidator<CreateAgendaItemDto>
 		RuleFor(x => x.DurationMinutes).GreaterThanOrEqualTo(0).When(x => x.DurationMinutes.HasValue);
 	}
 }
+
+public class GuestJoinRequestValidator : AbstractValidator<GuestJoinRequestDto>
+{
+	public GuestJoinRequestValidator()
+	{
+		RuleFor(x => x.Token).NotEmpty().MinimumLength(32).MaximumLength(64);
+		RuleFor(x => x.DisplayName)
+			.NotEmpty()
+			.Must(v => !string.IsNullOrWhiteSpace(v)).WithMessage("DisplayName must not be blank.")
+			.MaximumLength(80);
+	}
+}
