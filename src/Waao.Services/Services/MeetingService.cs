@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Waao.Domain.Models.Entities;
@@ -57,6 +58,7 @@ public sealed class MeetingService(
 			CalendarEventId = calEvent.Id,
 			OrganizerId = organizerId,
 			TranscriptionEnabled = dto.TranscriptionEnabled,
+			GuestToken = NewGuestToken(),
 			CreatedAt = DateTime.UtcNow,
 		};
 		Db.Meetings.Add(meeting);
@@ -380,8 +382,63 @@ public sealed class MeetingService(
 	}
 
 	// =====================================================================
+	// GUEST LINK
+	// =====================================================================
+
+	public async Task<GuestLinkDto> GetGuestLinkAsync(Guid meetingId, Guid callerId, CancellationToken ct = default)
+	{
+		var meeting = await Db.Meetings
+			.FirstOrDefaultAsync(m => m.Id == meetingId, ct)
+			?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+
+		if (!await CanWriteMeetingAsync(meeting, callerId, ct))
+			throw new UnauthorizedAccessException($"Caller {callerId} is not authorized to manage meeting {meetingId}.");
+
+		return new GuestLinkDto { Token = meeting.GuestToken };
+	}
+
+	public async Task<GuestJoinResultDto> JoinAsGuestAsync(Guid meetingId, GuestJoinRequestDto dto, CancellationToken ct = default)
+	{
+		var meeting = await Db.Meetings
+			.Include(m => m.CalendarEvent)
+			.FirstOrDefaultAsync(m => m.Id == meetingId, ct)
+			?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+
+		// Constant-time token comparison to prevent timing attacks.
+		var storedBytes = System.Text.Encoding.UTF8.GetBytes(meeting.GuestToken);
+		var providedBytes = System.Text.Encoding.UTF8.GetBytes(dto.Token);
+		if (!CryptographicOperations.FixedTimeEquals(storedBytes, providedBytes))
+			throw new UnauthorizedAccessException("Invalid guest token.");
+
+		var identity = $"guest-{Guid.CreateVersion7():N}";
+		var room = $"waao-{meetingId:N}";
+
+		var lkToken = LiveKitTokenService.MintGuestToken(new GuestLiveKitTokenRequest
+		{
+			Identity = identity,
+			Name = dto.DisplayName.Trim(),
+			Room = room,
+		});
+
+		return new GuestJoinResultDto
+		{
+			LiveKitUrl = LiveKitOptions.Value.Url,
+			LiveKitToken = lkToken,
+			MeetingTitle = meeting.CalendarEvent.Title,
+			TranscriptionEnabled = meeting.TranscriptionEnabled,
+		};
+	}
+
+	// =====================================================================
 	// HELPERS
 	// =====================================================================
+
+	/// <summary>Generates a URL-safe base64-encoded random token of ~32 chars (24 bytes → 32 base64url chars).</summary>
+	private static string NewGuestToken()
+	{
+		var bytes = RandomNumberGenerator.GetBytes(24);
+		return Convert.ToBase64String(bytes).Replace('+', '-').Replace('/', '_').TrimEnd('=');
+	}
 
 	private async Task<bool> CanReadMeetingAsync(Meeting meeting, Guid callerId, CancellationToken ct)
 	{

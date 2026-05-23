@@ -56,4 +56,49 @@ public sealed class LiveKitTokenService(IOptions<LiveKitOptions> Options) : ILiv
 
 		return new JwtSecurityTokenHandler().WriteToken(token);
 	}
+
+	public string MintGuestToken(GuestLiveKitTokenRequest request)
+	{
+		var options = Options.Value;
+
+		if (string.IsNullOrWhiteSpace(options.ApiKey) || string.IsNullOrWhiteSpace(options.ApiSecret))
+			throw new InvalidOperationException("LiveKit credentials are not configured. Set LiveKit__ApiKey and LiveKit__ApiSecret.");
+
+		var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(options.ApiSecret));
+		var signingCredentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+		var now = DateTime.UtcNow;
+		var exp = now.AddHours(2);
+
+		var videoGrant = JsonSerializer.Serialize(new
+		{
+			room = request.Room,
+			roomJoin = true,
+			canPublish = true,
+			canSubscribe = true,
+			canPublishData = true,
+			canPublishSources = new[] { "camera", "microphone", "screen_share" },
+		});
+
+		var metadata = JsonSerializer.Serialize(new { guest = true });
+
+		var claims = new List<Claim>
+		{
+			new(JwtRegisteredClaimNames.Iss, options.ApiKey),
+			new(JwtRegisteredClaimNames.Sub, request.Identity),
+			new("name", request.Name),
+			new("metadata", metadata),
+			new("video", videoGrant, JsonClaimValueTypes.Json),
+		};
+
+		var token = new JwtSecurityToken(
+			claims: claims,
+			notBefore: now,
+			expires: exp,
+			signingCredentials: signingCredentials);
+
+		token.Payload[JwtRegisteredClaimNames.Iat] = new DateTimeOffset(now).ToUnixTimeSeconds();
+
+		return new JwtSecurityTokenHandler().WriteToken(token);
+	}
 }

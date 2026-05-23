@@ -41,4 +41,19 @@ public interface IMeetingService
 	/// Intended for the LiveKit agent worker (authenticated via X-Transcription-Key).
 	/// </summary>
 	Task<TranscriptionEnabledDto> GetTranscriptionEnabledAsync(Guid meetingId, CancellationToken ct = default);
+
+	/// <summary>
+	/// Returns the opaque guest link token for the meeting.
+	/// Caller must be the organizer or an Admin; throws UnauthorizedAccessException otherwise.
+	/// Throws KeyNotFoundException if the meeting does not exist.
+	/// </summary>
+	Task<GuestLinkDto> GetGuestLinkAsync(Guid meetingId, Guid callerId, CancellationToken ct = default);
+
+	/// <summary>
+	/// Issues a LiveKit token for an anonymous guest.
+	/// Validates the meeting exists and that <paramref name="dto"/>.Token matches the stored GuestToken (constant-time compare).
+	/// Throws KeyNotFoundException if the meeting does not exist.
+	/// Throws UnauthorizedAccessException if the token does not match.
+	/// </summary>
+	Task<GuestJoinResultDto> JoinAsGuestAsync(Guid meetingId, GuestJoinRequestDto dto, CancellationToken ct = default);
 }
