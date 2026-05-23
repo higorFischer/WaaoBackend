@@ -26,12 +26,22 @@ public class MeetingConfiguration : IEntityTypeConfiguration<Meeting>
 			.IsRequired()
 			.HasDefaultValue(false);
 
+		builder.Property(x => x.GuestToken)
+			.IsRequired()
+			.HasMaxLength(64)
+			.HasDefaultValue(string.Empty);
+
 		// Unique: one meeting per calendar event (when not deleted)
 		builder.HasIndex(x => x.CalendarEventId)
 			.IsUnique()
 			.HasFilter("is_deleted = false");
 
 		builder.HasIndex(x => x.OrganizerId);
+
+		// Unique: one guest token per meeting (when not deleted)
+		builder.HasIndex(x => x.GuestToken)
+			.IsUnique()
+			.HasFilter("is_deleted = false");
 
 		builder.HasQueryFilter(x => !x.IsDeleted);
 	}
