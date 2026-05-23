@@ -75,6 +75,21 @@ public class MeetingsController(
 	public async Task<IActionResult> GetVideoToken(Guid id, CancellationToken ct)
 		=> Ok(await MeetingService.GetVideoTokenAsync(id, Me, ct));
 
+	[HttpGet("{id:guid}/guest-link")]
+	[ProducesResponseType(typeof(GuestLinkDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> GetGuestLink(Guid id, CancellationToken ct)
+		=> Ok(await MeetingService.GetGuestLinkAsync(id, Me, ct));
+
+	[HttpPost("{id:guid}/guest/join")]
+	[AllowAnonymous]
+	[ProducesResponseType(typeof(GuestJoinResultDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> GuestJoin(Guid id, [FromBody] GuestJoinRequestDto dto, CancellationToken ct)
+		=> Ok(await MeetingService.JoinAsGuestAsync(id, dto, ct));
+
 	[HttpGet("{id:guid}/transcription-enabled")]
 	[AllowAnonymous]
 	[ProducesResponseType(typeof(TranscriptionEnabledDto), StatusCodes.Status200OK)]
