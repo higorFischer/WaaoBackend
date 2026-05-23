@@ -22,7 +22,7 @@ public sealed class LiveKitTokenService(IOptions<LiveKitOptions> Options) : ILiv
 		var signingCredentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
 		var now = DateTime.UtcNow;
-		var exp = now.AddHours(2);
+		var exp = now.AddHours(24);
 
 		// LiveKit video grant — embedded as a real JSON object via JsonClaimValueTypes.Json.
 		var videoGrant = JsonSerializer.Serialize(new
@@ -68,7 +68,7 @@ public sealed class LiveKitTokenService(IOptions<LiveKitOptions> Options) : ILiv
 		var signingCredentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
 		var now = DateTime.UtcNow;
-		var exp = now.AddHours(2);
+		var exp = now.AddHours(24);
 
 		var videoGrant = JsonSerializer.Serialize(new
 		{
