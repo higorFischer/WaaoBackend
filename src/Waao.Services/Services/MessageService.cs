@@ -50,6 +50,7 @@ public sealed class MessageService(
 		var query = Db.Messages
 			.Include(m => m.Author)
 			.Include(m => m.ParentMessage).ThenInclude(p => p!.Author)
+			.Include(m => m.Attachments)
 			.Where(m => m.ChannelId == channelId);
 
 		if (cursorTime.HasValue)
@@ -117,16 +118,48 @@ public sealed class MessageService(
 				throw new KeyNotFoundException($"Parent message {parentId} not found in channel {channelId}.");
 		}
 
+		// Allow empty body when attachments are present.
+		var hasAttachments = dto.Attachments is { Count: > 0 };
+		if (string.IsNullOrWhiteSpace(dto.Body) && !hasAttachments)
+			throw new ArgumentException("Message must have a body or at least one attachment.");
+
 		var message = new Message
 		{
 			Id = Guid.CreateVersion7(),
 			ChannelId = channelId,
 			AuthorId = authorId,
-			Body = dto.Body,
+			Body = dto.Body ?? string.Empty,
 			ParentMessageId = parent?.Id,
 			CreatedAt = DateTime.UtcNow,
 		};
 		Db.Messages.Add(message);
+
+		var attachmentDtos = new List<MessageAttachmentDto>();
+		if (hasAttachments)
+		{
+			foreach (var a in dto.Attachments)
+			{
+				var att = new MessageAttachment
+				{
+					Id = Guid.CreateVersion7(),
+					MessageId = message.Id,
+					Kind = a.Kind,
+					Url = a.Url,
+					Mime = a.Mime,
+					OriginalName = a.OriginalName ?? string.Empty,
+					SizeBytes = a.SizeBytes,
+					DurationSeconds = a.DurationSeconds,
+					CreatedAt = DateTime.UtcNow,
+				};
+				Db.MessageAttachments.Add(att);
+				attachmentDtos.Add(new MessageAttachmentDto
+				{
+					Id = att.Id, Kind = att.Kind, Url = att.Url, Mime = att.Mime,
+					OriginalName = att.OriginalName, SizeBytes = att.SizeBytes, DurationSeconds = att.DurationSeconds,
+				});
+			}
+		}
+
 		await Db.SaveChangesAsync(ct);
 
 		// Parse mentions, filter to channel members (not the author), persist rows + notifications
@@ -208,6 +241,7 @@ public sealed class MessageService(
 				Body = MentionParser.ToPlainText(parent.Body),
 			},
 			Mentions = mentionDtos,
+			Attachments = attachmentDtos,
 		};
 	}
 
@@ -225,6 +259,7 @@ public sealed class MessageService(
 		var message = await Db.Messages
 			.Include(m => m.Author)
 			.Include(m => m.ParentMessage).ThenInclude(p => p!.Author)
+			.Include(m => m.Attachments)
 			.FirstOrDefaultAsync(m => m.Id == messageId && m.ChannelId == channelId, ct)
 			?? throw new KeyNotFoundException($"Message {messageId} not found in channel {channelId}.");
 
@@ -276,6 +311,11 @@ public sealed class MessageService(
 		{
 			MentionedCollaboratorId = mm.MentionedCollaboratorId,
 			MentionedCollaboratorName = mm.MentionedCollaborator?.FullName ?? string.Empty,
+		}).ToList() ?? [],
+		Attachments = m.Attachments?.Select(a => new MessageAttachmentDto
+		{
+			Id = a.Id, Kind = a.Kind, Url = a.Url, Mime = a.Mime,
+			OriginalName = a.OriginalName, SizeBytes = a.SizeBytes, DurationSeconds = a.DurationSeconds,
 		}).ToList() ?? [],
 	};
 }

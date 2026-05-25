@@ -16,4 +16,6 @@ public class Message : Entity
 
 	/// <summary>Set the first time the author edits the message; updated on each subsequent edit.</summary>
 	public DateTime? EditedAtUtc { get; set; }
+
+	public virtual ICollection<MessageAttachment> Attachments { get; set; } = [];
 }

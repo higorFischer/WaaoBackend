@@ -108,6 +108,10 @@ builder.Services.AddScoped<IMeetingTranscriptService, Waao.Services.Transcriptio
 // Feature requests
 builder.Services.AddScoped<IFeatureRequestService, Waao.Services.Services.FeatureRequestService>();
 
+// R2 storage (used for chat attachments)
+builder.Services.Configure<Waao.Services.Storage.R2Options>(builder.Configuration.GetSection("R2"));
+builder.Services.AddSingleton<Waao.Services.Abstractions.Services.IR2StorageService, Waao.Services.Storage.R2StorageService>();
+
 // LiveKit video
 builder.Services.Configure<LiveKitOptions>(builder.Configuration.GetSection("LiveKit"));
 builder.Services.AddSingleton<ILiveKitTokenService, LiveKitTokenService>();

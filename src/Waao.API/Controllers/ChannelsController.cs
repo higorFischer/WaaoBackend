@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Waao.API.Hubs;
+using Waao.Domain.Models.Enums;
 using Waao.Services.Abstractions.Dtos.Messaging;
 using Waao.Services.Abstractions.Services;
 
@@ -14,6 +15,7 @@ namespace Waao.API.Controllers;
 public class ChannelsController(
 	IChannelService ChannelService,
 	IMessageService MessageService,
+	IR2StorageService Storage,
 	IHubContext<MessagingHub> Hub) : ControllerBase
 {
 	private Guid Me => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
@@ -135,6 +137,51 @@ public class ChannelsController(
 		var message = await MessageService.EditMessageAsync(id, messageId, dto, Me, ct);
 		await Hub.Clients.Group(MessagingHub.GroupName(id)).SendAsync("messageEdited", message, ct);
 		return Ok(message);
+	}
+
+	[HttpPost("{id:guid}/attachments")]
+	[ProducesResponseType(typeof(UploadedAttachmentDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
+	[RequestSizeLimit(25_000_000)]
+	public async Task<IActionResult> UploadAttachment(
+		Guid id,
+		[FromForm] IFormFile file,
+		[FromForm] int? durationSeconds,
+		CancellationToken ct)
+	{
+		if (file is null || file.Length == 0)
+			return BadRequest("Empty file.");
+		if (file.Length > 25_000_000)
+			return StatusCode(StatusCodes.Status413PayloadTooLarge);
+		if (!Storage.IsEnabled)
+			return StatusCode(StatusCodes.Status503ServiceUnavailable, "Attachments are not configured.");
+
+		var mime = file.ContentType ?? "application/octet-stream";
+		var kind = mime.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+			? MessageAttachmentKind.Image
+			: mime.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)
+				? MessageAttachmentKind.Audio
+				: MessageAttachmentKind.File;
+
+		// Key: chat/<channelId>/<yyyyMMdd>/<guid>-<sanitized-name>
+		var safeName = System.IO.Path.GetFileName(file.FileName ?? "file");
+		safeName = string.Concat(safeName.Where(c => char.IsLetterOrDigit(c) || c is '.' or '-' or '_'));
+		if (string.IsNullOrEmpty(safeName)) safeName = "file";
+		var key = $"chat/{id:N}/{DateTime.UtcNow:yyyyMMdd}/{Guid.CreateVersion7():N}-{safeName}";
+
+		using var stream = file.OpenReadStream();
+		var url = await Storage.UploadAsync(key, stream, mime, ct);
+
+		return Ok(new UploadedAttachmentDto
+		{
+			Kind            = kind,
+			Url             = url,
+			Mime            = mime,
+			OriginalName    = file.FileName ?? safeName,
+			SizeBytes       = file.Length,
+			DurationSeconds = durationSeconds,
+		});
 	}
 }
 

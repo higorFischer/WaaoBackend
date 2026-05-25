@@ -3,6 +3,27 @@ using Waao.Services.Abstractions.Dtos.Notifications;
 
 namespace Waao.Services.Abstractions.Dtos.Messaging;
 
+public record MessageAttachmentDto
+{
+	public Guid Id { get; init; }
+	public MessageAttachmentKind Kind { get; init; }
+	public string Url { get; init; } = string.Empty;
+	public string Mime { get; init; } = string.Empty;
+	public string OriginalName { get; init; } = string.Empty;
+	public long SizeBytes { get; init; }
+	public int? DurationSeconds { get; init; }
+}
+
+public record UploadedAttachmentDto
+{
+	public MessageAttachmentKind Kind { get; init; }
+	public string Url { get; init; } = string.Empty;
+	public string Mime { get; init; } = string.Empty;
+	public string OriginalName { get; init; } = string.Empty;
+	public long SizeBytes { get; init; }
+	public int? DurationSeconds { get; init; }
+}
+
 public record ChannelDto
 {
 	public Guid Id { get; init; }
@@ -41,6 +62,7 @@ public record MessageDto
 	public Guid? ParentMessageId { get; init; }
 	public ParentMessagePreviewDto? ParentPreview { get; init; }
 	public IReadOnlyList<MessageMentionDto> Mentions { get; init; } = [];
+	public IReadOnlyList<MessageAttachmentDto> Attachments { get; init; } = [];
 }
 
 public record ParentMessagePreviewDto
@@ -70,6 +92,7 @@ public record PostMessageDto
 {
 	public string Body { get; init; } = string.Empty;
 	public Guid? ParentMessageId { get; init; }
+	public IReadOnlyList<UploadedAttachmentDto> Attachments { get; init; } = [];
 }
 
 public record EditMessageDto

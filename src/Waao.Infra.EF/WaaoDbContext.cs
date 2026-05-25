@@ -68,6 +68,9 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 	public DbSet<FeatureRequest> FeatureRequests => Set<FeatureRequest>();
 	public DbSet<FeatureRequestVote> FeatureRequestVotes => Set<FeatureRequestVote>();
 
+	// Messaging — attachments
+	public DbSet<Waao.Domain.Models.Entities.Messaging.MessageAttachment> MessageAttachments => Set<Waao.Domain.Models.Entities.Messaging.MessageAttachment>();
+
 	protected override void OnModelCreating(ModelBuilder modelBuilder)
 	{
 		base.OnModelCreating(modelBuilder);
