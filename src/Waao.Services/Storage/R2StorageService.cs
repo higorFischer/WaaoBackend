@@ -25,6 +25,8 @@ public sealed class R2StorageService(
 		using var buffer = new MemoryStream();
 		await content.CopyToAsync(buffer, ct);
 		buffer.Position = 0;
+		// Capture length up front — the AWS SDK may dispose the stream after PutObject.
+		var sizeBytes = buffer.Length;
 
 		using var s3 = BuildClient();
 		var req = new PutObjectRequest
@@ -43,11 +45,11 @@ public sealed class R2StorageService(
 		catch (Exception ex)
 		{
 			Logger.LogError(ex, "R2 PutObject failed bucket={Bucket} key={Key} size={Size} contentType={ContentType}",
-				Options.Bucket, key, buffer.Length, contentType);
+				Options.Bucket, key, sizeBytes, contentType);
 			throw;
 		}
 
-		Logger.LogInformation("Uploaded to R2 key={Key} size={Size} contentType={ContentType}", key, buffer.Length, contentType);
+		Logger.LogInformation("Uploaded to R2 key={Key} size={Size} contentType={ContentType}", key, sizeBytes, contentType);
 		return Options.PublicUrlFor(key);
 	}
 
