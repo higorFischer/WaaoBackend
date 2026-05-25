@@ -12,6 +12,11 @@ public static class MentionParser
 		@"@\[([^\]]+)\]\(([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\)",
 		RegexOptions.Compiled);
 
+	// Matches #card[Title](id) and #meeting[Title](id) — group 1 = kind, 2 = title, 3 = id.
+	private static readonly Regex RefRegex = new(
+		@"#(card|meeting)\[([^\]]+)\]\(([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\)",
+		RegexOptions.Compiled);
+
 	/// <summary>
 	/// Extracts distinct collaborator Guids from @[Name](id) tokens in the message body.
 	/// Malformed tokens are silently ignored. Result is de-duplicated.
@@ -37,6 +42,7 @@ public static class MentionParser
 		if (string.IsNullOrEmpty(body))
 			return body;
 
-		return MentionRegex.Replace(body, m => $"@{m.Groups[1].Value}");
+		var withMentions = MentionRegex.Replace(body, m => $"@{m.Groups[1].Value}");
+		return RefRegex.Replace(withMentions, m => $"#{m.Groups[1].Value}:{m.Groups[2].Value}");
 	}
 }
