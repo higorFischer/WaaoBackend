@@ -11,6 +11,7 @@ public record ChannelDto
 	public ChannelKind Kind { get; init; }
 	public ChannelScope Scope { get; init; }
 	public Guid? DepartmentId { get; init; }
+	public Guid CreatedById { get; init; }
 	public int MemberCount { get; init; }
 	public bool IsMember { get; init; }
 	public int UnreadCount { get; init; }
@@ -45,6 +46,13 @@ public record CreateChannelDto
 	public string? Description { get; init; }
 	public ChannelKind Kind { get; init; }
 	public IReadOnlyList<Guid> InitialMemberIds { get; init; } = [];
+}
+
+public record UpdateChannelDto
+{
+	public string? Name { get; init; }
+	public string? Description { get; init; }
+	public ChannelKind? Kind { get; init; }
 }
 
 public record PostMessageDto

@@ -97,6 +97,7 @@ public sealed class ChannelService(
 				Kind = channel.Kind,
 				Scope = channel.Scope,
 				DepartmentId = channel.DepartmentId,
+				CreatedById = channel.CreatedById,
 				MemberCount = memberCount,
 				IsMember = true,
 				UnreadCount = unreadCount,
@@ -140,6 +141,7 @@ public sealed class ChannelService(
 			Kind = c.Kind,
 			Scope = c.Scope,
 			DepartmentId = c.DepartmentId,
+			CreatedById = c.CreatedById,
 			MemberCount = memberCounts.FirstOrDefault(x => x.ChannelId == c.Id)?.Count ?? 0,
 			IsMember = false,
 			UnreadCount = 0,
@@ -413,6 +415,93 @@ public sealed class ChannelService(
 	}
 
 	// =====================================================================
+	// UPDATE CHANNEL
+	// =====================================================================
+
+	public async Task<ChannelDto> UpdateChannelAsync(Guid channelId, UpdateChannelDto dto, Guid callerId, CancellationToken ct = default)
+	{
+		var channel = await Db.Channels.FirstOrDefaultAsync(c => c.Id == channelId, ct)
+			?? throw new KeyNotFoundException($"Channel {channelId} not found.");
+
+		if (channel.Kind == ChannelKind.DirectMessage)
+			throw new InvalidOperationException("Direct message channels cannot be edited.");
+
+		if (!await CanManageChannelAsync(channel, callerId, ct))
+			throw new UnauthorizedAccessException($"Caller {callerId} cannot manage channel {channelId}.");
+
+		if (dto.Name is not null) channel.Name = dto.Name.Trim();
+		if (dto.Description is not null) channel.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
+		if (dto.Kind is ChannelKind newKind)
+		{
+			if (newKind == ChannelKind.DirectMessage)
+				throw new InvalidOperationException("Cannot change channel kind to DirectMessage.");
+			channel.Kind = newKind;
+		}
+		channel.UpdatedAt = DateTime.UtcNow;
+
+		await Db.SaveChangesAsync(ct);
+
+		return await BuildChannelDtoAsync(channelId, callerId, ct);
+	}
+
+	// =====================================================================
+	// REMOVE MEMBER
+	// =====================================================================
+
+	public async Task RemoveMemberAsync(Guid channelId, Guid collaboratorId, Guid actorId, CancellationToken ct = default)
+	{
+		var channel = await Db.Channels.FirstOrDefaultAsync(c => c.Id == channelId, ct)
+			?? throw new KeyNotFoundException($"Channel {channelId} not found.");
+
+		if (channel.Kind == ChannelKind.DirectMessage)
+			throw new InvalidOperationException("Cannot remove members from a direct message channel.");
+
+		if (!await CanManageChannelAsync(channel, actorId, ct))
+			throw new UnauthorizedAccessException($"Caller {actorId} cannot manage channel {channelId}.");
+
+		if (collaboratorId == channel.CreatedById)
+			throw new InvalidOperationException("Cannot remove the channel creator.");
+
+		var member = await Db.ChannelMembers
+			.FirstOrDefaultAsync(m => m.ChannelId == channelId && m.CollaboratorId == collaboratorId, ct)
+			?? throw new KeyNotFoundException($"Collaborator {collaboratorId} is not a member of channel {channelId}.");
+
+		member.IsDeleted = true;
+		member.DeletedAt = DateTime.UtcNow;
+
+		await Db.SaveChangesAsync(ct);
+	}
+
+	// =====================================================================
+	// DELETE CHANNEL
+	// =====================================================================
+
+	public async Task DeleteChannelAsync(Guid channelId, Guid callerId, CancellationToken ct = default)
+	{
+		var channel = await Db.Channels.FirstOrDefaultAsync(c => c.Id == channelId, ct)
+			?? throw new KeyNotFoundException($"Channel {channelId} not found.");
+
+		if (channel.Kind == ChannelKind.DirectMessage)
+			throw new InvalidOperationException("Direct message channels cannot be deleted.");
+
+		if (!await CanManageChannelAsync(channel, callerId, ct))
+			throw new UnauthorizedAccessException($"Caller {callerId} cannot manage channel {channelId}.");
+
+		channel.IsDeleted = true;
+		channel.DeletedAt = DateTime.UtcNow;
+
+		await Db.SaveChangesAsync(ct);
+	}
+
+	// Creator or Admin can manage a channel.
+	private async Task<bool> CanManageChannelAsync(Channel channel, Guid callerId, CancellationToken ct)
+	{
+		if (channel.CreatedById == callerId) return true;
+		return await Db.Collaborators
+			.AnyAsync(c => c.Id == callerId && c.RoleKind == CollaboratorRoleKind.Admin, ct);
+	}
+
+	// =====================================================================
 	// INTERNAL HELPER: create channel (used by seed)
 	// =====================================================================
 
@@ -521,6 +610,7 @@ public sealed class ChannelService(
 			Kind = channel.Kind,
 			Scope = channel.Scope,
 			DepartmentId = channel.DepartmentId,
+			CreatedById = channel.CreatedById,
 			MemberCount = members.Count,
 			IsMember = isMember,
 			UnreadCount = unreadCount,

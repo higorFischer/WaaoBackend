@@ -58,6 +58,35 @@ public class ChannelsController(
 	public async Task<IActionResult> AddMember(Guid id, [FromBody] AddMemberDto dto, CancellationToken ct)
 		=> Ok(await ChannelService.AddMemberAsync(id, dto.CollaboratorId, Me, ct));
 
+	[HttpDelete("{id:guid}/members/{collaboratorId:guid}")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> RemoveMember(Guid id, Guid collaboratorId, CancellationToken ct)
+	{
+		await ChannelService.RemoveMemberAsync(id, collaboratorId, Me, ct);
+		return NoContent();
+	}
+
+	[HttpPut("{id:guid}")]
+	[ProducesResponseType(typeof(ChannelDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> Update(Guid id, [FromBody] UpdateChannelDto dto, CancellationToken ct)
+		=> Ok(await ChannelService.UpdateChannelAsync(id, dto, Me, ct));
+
+	[HttpDelete("{id:guid}")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+	{
+		await ChannelService.DeleteChannelAsync(id, Me, ct);
+		return NoContent();
+	}
+
 	[HttpGet("{id:guid}/members")]
 	[ProducesResponseType(typeof(IReadOnlyList<ChannelMemberDto>), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]

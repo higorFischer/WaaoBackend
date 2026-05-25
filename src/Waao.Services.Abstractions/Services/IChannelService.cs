@@ -30,4 +30,13 @@ public interface IChannelService
 
 	/// <summary>Returns the members of a channel. Caller must be a member.</summary>
 	Task<IReadOnlyList<ChannelMemberDto>> GetMembersAsync(Guid channelId, Guid callerId, CancellationToken ct = default);
+
+	/// <summary>Updates name/description/kind. Caller must be creator or Admin. DM channels cannot be edited.</summary>
+	Task<ChannelDto> UpdateChannelAsync(Guid channelId, UpdateChannelDto dto, Guid callerId, CancellationToken ct = default);
+
+	/// <summary>Removes a member from a channel. Caller must be creator or Admin. Cannot remove creator. Use Leave to remove self.</summary>
+	Task RemoveMemberAsync(Guid channelId, Guid collaboratorId, Guid actorId, CancellationToken ct = default);
+
+	/// <summary>Soft-deletes the channel. Caller must be creator or Admin. DMs cannot be deleted.</summary>
+	Task DeleteChannelAsync(Guid channelId, Guid callerId, CancellationToken ct = default);
 }
