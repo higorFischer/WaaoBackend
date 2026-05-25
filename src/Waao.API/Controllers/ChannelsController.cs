@@ -16,7 +16,8 @@ public class ChannelsController(
 	IChannelService ChannelService,
 	IMessageService MessageService,
 	IR2StorageService Storage,
-	IHubContext<MessagingHub> Hub) : ControllerBase
+	IHubContext<MessagingHub> Hub,
+	ILogger<ChannelsController> Logger) : ControllerBase
 {
 	private Guid Me => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
 		? id : throw new UnauthorizedAccessException("Missing subject claim.");
@@ -170,18 +171,27 @@ public class ChannelsController(
 		if (string.IsNullOrEmpty(safeName)) safeName = "file";
 		var key = $"chat/{id:N}/{DateTime.UtcNow:yyyyMMdd}/{Guid.CreateVersion7():N}-{safeName}";
 
-		using var stream = file.OpenReadStream();
-		var url = await Storage.UploadAsync(key, stream, mime, ct);
-
-		return Ok(new UploadedAttachmentDto
+		try
 		{
-			Kind            = kind,
-			Url             = url,
-			Mime            = mime,
-			OriginalName    = file.FileName ?? safeName,
-			SizeBytes       = file.Length,
-			DurationSeconds = durationSeconds,
-		});
+			using var stream = file.OpenReadStream();
+			var url = await Storage.UploadAsync(key, stream, mime, ct);
+
+			return Ok(new UploadedAttachmentDto
+			{
+				Kind            = kind,
+				Url             = url,
+				Mime            = mime,
+				OriginalName    = file.FileName ?? safeName,
+				SizeBytes       = file.Length,
+				DurationSeconds = durationSeconds,
+			});
+		}
+		catch (Exception ex)
+		{
+			Logger.LogError(ex, "Attachment upload failed channel={Channel} fileName={Name} size={Size} mime={Mime}",
+				id, file.FileName, file.Length, mime);
+			return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+		}
 	}
 }
 

@@ -19,19 +19,35 @@ public sealed class R2StorageService(
 		if (!IsEnabled)
 			throw new InvalidOperationException("R2 storage is not configured.");
 
+		// Buffer to a seekable MemoryStream so the AWS SDK can compute Content-Length
+		// without chunked-transfer/payload-signing — R2 rejects unsigned streaming PUTs
+		// that come from non-seekable streams.
+		using var buffer = new MemoryStream();
+		await content.CopyToAsync(buffer, ct);
+		buffer.Position = 0;
+
 		using var s3 = BuildClient();
 		var req = new PutObjectRequest
 		{
-			BucketName  = Options.Bucket,
-			Key         = key,
-			InputStream = content,
-			ContentType = contentType,
+			BucketName            = Options.Bucket,
+			Key                   = key,
+			InputStream           = buffer,
+			ContentType           = contentType,
 			DisablePayloadSigning = true,
-			DisableDefaultChecksumValidation = true,
 		};
 
-		await s3.PutObjectAsync(req, ct);
-		Logger.LogInformation("Uploaded to R2 key={Key} contentType={ContentType}", key, contentType);
+		try
+		{
+			await s3.PutObjectAsync(req, ct);
+		}
+		catch (Exception ex)
+		{
+			Logger.LogError(ex, "R2 PutObject failed bucket={Bucket} key={Key} size={Size} contentType={ContentType}",
+				Options.Bucket, key, buffer.Length, contentType);
+			throw;
+		}
+
+		Logger.LogInformation("Uploaded to R2 key={Key} size={Size} contentType={ContentType}", key, buffer.Length, contentType);
 		return Options.PublicUrlFor(key);
 	}
 
