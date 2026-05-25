@@ -105,6 +105,9 @@ builder.Services.AddScoped<ICalendarEventService, CalendarEventService>();
 builder.Services.AddScoped<IMeetingService, Waao.Services.Services.MeetingService>();
 builder.Services.AddScoped<IMeetingTranscriptService, Waao.Services.Transcription.MeetingTranscriptService>();
 
+// Feature requests
+builder.Services.AddScoped<IFeatureRequestService, Waao.Services.Services.FeatureRequestService>();
+
 // LiveKit video
 builder.Services.Configure<LiveKitOptions>(builder.Configuration.GetSection("LiveKit"));
 builder.Services.AddSingleton<ILiveKitTokenService, LiveKitTokenService>();

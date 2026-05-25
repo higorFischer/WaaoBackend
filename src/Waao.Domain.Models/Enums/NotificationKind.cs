@@ -7,4 +7,5 @@ public enum NotificationKind
 	MeetingInvite = 2,
 	MeetingUpdated = 3,
 	MeetingCancelled = 4,
+	FeatureRequestStatus = 5,
 }

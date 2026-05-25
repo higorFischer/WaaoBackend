@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Waao.Domain.Models.Entities;
 using Waao.Domain.Models.Entities.Calendar;
+using Waao.Domain.Models.Entities.FeatureRequests;
 using Waao.Domain.Models.Entities.Kanban;
 using Waao.Domain.Models.Entities.Meetings;
 using Waao.Domain.Models.Entities.Messaging;
@@ -62,6 +63,10 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 	public DbSet<CardChecklist> CardChecklists => Set<CardChecklist>();
 	public DbSet<CardChecklistItem> CardChecklistItems => Set<CardChecklistItem>();
 	public DbSet<CardActivity> CardActivities => Set<CardActivity>();
+
+	// Feature requests
+	public DbSet<FeatureRequest> FeatureRequests => Set<FeatureRequest>();
+	public DbSet<FeatureRequestVote> FeatureRequestVotes => Set<FeatureRequestVote>();
 
 	protected override void OnModelCreating(ModelBuilder modelBuilder)
 	{
