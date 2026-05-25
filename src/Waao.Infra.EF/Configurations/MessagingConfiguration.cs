@@ -94,8 +94,16 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
 			.HasForeignKey(x => x.AuthorId)
 			.OnDelete(DeleteBehavior.Restrict);
 
+		builder.HasOne(x => x.ParentMessage)
+			.WithMany()
+			.HasForeignKey(x => x.ParentMessageId)
+			.OnDelete(DeleteBehavior.SetNull);
+
+		builder.Property(x => x.EditedAtUtc);
+
 		// Hot path index: history pagination
 		builder.HasIndex(x => new { x.ChannelId, x.CreatedAt });
+		builder.HasIndex(x => x.ParentMessageId);
 
 		builder.HasQueryFilter(x => !x.IsDeleted);
 	}

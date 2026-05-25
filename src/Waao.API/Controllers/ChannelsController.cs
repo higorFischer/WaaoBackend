@@ -124,6 +124,18 @@ public class ChannelsController(
 		await Hub.Clients.Group(MessagingHub.GroupName(id)).SendAsync("messageReceived", message, ct);
 		return Created(string.Empty, message);
 	}
+
+	[HttpPut("{id:guid}/messages/{messageId:guid}")]
+	[ProducesResponseType(typeof(MessageDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> EditMessage(Guid id, Guid messageId, [FromBody] EditMessageDto dto, CancellationToken ct)
+	{
+		var message = await MessageService.EditMessageAsync(id, messageId, dto, Me, ct);
+		await Hub.Clients.Group(MessagingHub.GroupName(id)).SendAsync("messageEdited", message, ct);
+		return Ok(message);
+	}
 }
 
 // Small inline DTO for adding a member (avoids a dedicated file for a single property)

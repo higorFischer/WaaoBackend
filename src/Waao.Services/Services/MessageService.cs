@@ -49,6 +49,7 @@ public sealed class MessageService(
 
 		var query = Db.Messages
 			.Include(m => m.Author)
+			.Include(m => m.ParentMessage).ThenInclude(p => p!.Author)
 			.Where(m => m.ChannelId == channelId);
 
 		if (cursorTime.HasValue)
@@ -105,12 +106,24 @@ public sealed class MessageService(
 		var author = await Db.Collaborators.FirstOrDefaultAsync(c => c.Id == authorId, ct)
 			?? throw new KeyNotFoundException($"Author {authorId} not found.");
 
+		// Validate parent if provided — must belong to the same channel.
+		Message? parent = null;
+		if (dto.ParentMessageId is Guid parentId)
+		{
+			parent = await Db.Messages
+				.Include(p => p.Author)
+				.FirstOrDefaultAsync(p => p.Id == parentId && p.ChannelId == channelId, ct);
+			if (parent is null)
+				throw new KeyNotFoundException($"Parent message {parentId} not found in channel {channelId}.");
+		}
+
 		var message = new Message
 		{
 			Id = Guid.CreateVersion7(),
 			ChannelId = channelId,
 			AuthorId = authorId,
 			Body = dto.Body,
+			ParentMessageId = parent?.Id,
 			CreatedAt = DateTime.UtcNow,
 		};
 		Db.Messages.Add(message);
@@ -185,8 +198,56 @@ public sealed class MessageService(
 			AuthorPhotoUrl = author.PhotoUrl,
 			Body = message.Body,
 			CreatedAtUtc = message.CreatedAt,
+			EditedAtUtc = null,
+			ParentMessageId = parent?.Id,
+			ParentPreview = parent is null ? null : new ParentMessagePreviewDto
+			{
+				Id = parent.Id,
+				AuthorId = parent.AuthorId,
+				AuthorName = parent.Author?.FullName ?? string.Empty,
+				Body = MentionParser.ToPlainText(parent.Body),
+			},
 			Mentions = mentionDtos,
 		};
+	}
+
+	// =====================================================================
+	// EDIT MESSAGE
+	// =====================================================================
+
+	public async Task<MessageDto> EditMessageAsync(
+		Guid channelId,
+		Guid messageId,
+		EditMessageDto dto,
+		Guid callerId,
+		CancellationToken ct = default)
+	{
+		var message = await Db.Messages
+			.Include(m => m.Author)
+			.Include(m => m.ParentMessage).ThenInclude(p => p!.Author)
+			.FirstOrDefaultAsync(m => m.Id == messageId && m.ChannelId == channelId, ct)
+			?? throw new KeyNotFoundException($"Message {messageId} not found in channel {channelId}.");
+
+		if (message.AuthorId != callerId)
+			throw new UnauthorizedAccessException("Only the author can edit this message.");
+
+		var newBody = (dto.Body ?? string.Empty).Trim();
+		if (newBody.Length == 0)
+			throw new ArgumentException("Message body cannot be empty.");
+		if (newBody.Length > 4000)
+			newBody = newBody[..4000];
+
+		message.Body = newBody;
+		message.EditedAtUtc = DateTime.UtcNow;
+		message.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+
+		var mentions = await Db.MessageMentions
+			.Include(mm => mm.MentionedCollaborator)
+			.Where(mm => mm.MessageId == messageId)
+			.ToListAsync(ct);
+
+		return MapToDto(message, mentions);
 	}
 
 	// =====================================================================
@@ -202,6 +263,15 @@ public sealed class MessageService(
 		AuthorPhotoUrl = m.Author.PhotoUrl,
 		Body = m.Body,
 		CreatedAtUtc = m.CreatedAt,
+		EditedAtUtc = m.EditedAtUtc,
+		ParentMessageId = m.ParentMessageId,
+		ParentPreview = m.ParentMessage is null ? null : new ParentMessagePreviewDto
+		{
+			Id = m.ParentMessage.Id,
+			AuthorId = m.ParentMessage.AuthorId,
+			AuthorName = m.ParentMessage.Author?.FullName ?? string.Empty,
+			Body = MentionParser.ToPlainText(m.ParentMessage.Body),
+		},
 		Mentions = mentions?.Select(mm => new MessageMentionDto
 		{
 			MentionedCollaboratorId = mm.MentionedCollaboratorId,

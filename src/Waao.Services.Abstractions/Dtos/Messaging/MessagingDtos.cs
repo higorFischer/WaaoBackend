@@ -37,7 +37,18 @@ public record MessageDto
 	public string? AuthorPhotoUrl { get; init; }
 	public string Body { get; init; } = string.Empty;
 	public DateTime CreatedAtUtc { get; init; }
+	public DateTime? EditedAtUtc { get; init; }
+	public Guid? ParentMessageId { get; init; }
+	public ParentMessagePreviewDto? ParentPreview { get; init; }
 	public IReadOnlyList<MessageMentionDto> Mentions { get; init; } = [];
+}
+
+public record ParentMessagePreviewDto
+{
+	public Guid Id { get; init; }
+	public Guid AuthorId { get; init; }
+	public string AuthorName { get; init; } = string.Empty;
+	public string Body { get; init; } = string.Empty;
 }
 
 public record CreateChannelDto
@@ -56,6 +67,12 @@ public record UpdateChannelDto
 }
 
 public record PostMessageDto
+{
+	public string Body { get; init; } = string.Empty;
+	public Guid? ParentMessageId { get; init; }
+}
+
+public record EditMessageDto
 {
 	public string Body { get; init; } = string.Empty;
 }

@@ -16,4 +16,7 @@ public interface IMessageService
 	/// Returns the persisted MessageDto; the caller (controller) broadcasts it over SignalR.
 	/// </summary>
 	Task<MessageDto> PostMessageAsync(Guid channelId, PostMessageDto dto, Guid authorId, CancellationToken ct = default);
+
+	/// <summary>Edits a message. Only the original author may edit; soft-deleted messages cannot be edited.</summary>
+	Task<MessageDto> EditMessageAsync(Guid channelId, Guid messageId, EditMessageDto dto, Guid callerId, CancellationToken ct = default);
 }
