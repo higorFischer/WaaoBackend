@@ -26,6 +26,20 @@ public sealed class MeetingService(
 
 	public async Task<MeetingDto> CreateAsync(CreateMeetingDto dto, Guid organizerId, CancellationToken ct = default)
 	{
+		// Duplicate guard: same organizer + same title + same start time + still Active.
+		var titleTrimmed = (dto.Title ?? string.Empty).Trim();
+		var isDuplicate = await Db.Meetings
+			.Include(m => m.CalendarEvent)
+			.AnyAsync(m =>
+				m.OrganizerId == organizerId
+				&& m.Status == MeetingStatus.Active
+				&& m.CalendarEvent.Title == titleTrimmed
+				&& m.CalendarEvent.StartsAtUtc == dto.StartsAtUtc,
+				ct);
+
+		if (isDuplicate)
+			throw new InvalidOperationException("A meeting with the same title and start time already exists.");
+
 		// Ensure organizer has a personal calendar
 		var calendarId = await CalendarService.EnsurePersonalCalendarAsync(organizerId, ct);
 
@@ -230,6 +244,7 @@ public sealed class MeetingService(
 		// Soft-delete meeting
 		meeting.IsDeleted = true;
 		meeting.DeletedAt = DateTime.UtcNow;
+		meeting.Status = MeetingStatus.Cancelled;
 
 		// Soft-delete attendees (ignore global filter to get all)
 		var attendees = await Db.MeetingAttendees
@@ -273,6 +288,29 @@ public sealed class MeetingService(
 				callerId,
 				ct);
 		}
+	}
+
+	// =====================================================================
+	// END
+	// =====================================================================
+
+	public async Task EndAsync(Guid meetingId, Guid callerId, CancellationToken ct = default)
+	{
+		var meeting = await Db.Meetings
+			.FirstOrDefaultAsync(m => m.Id == meetingId, ct)
+			?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+
+		if (!await CanWriteMeetingAsync(meeting, callerId, ct))
+			throw new UnauthorizedAccessException($"Caller {callerId} cannot end meeting {meetingId}.");
+
+		if (meeting.Status == MeetingStatus.Ended) return;
+		if (meeting.Status == MeetingStatus.Cancelled)
+			throw new InvalidOperationException($"Meeting {meetingId} is cancelled; cannot end.");
+
+		meeting.Status = MeetingStatus.Ended;
+		meeting.EndedAtUtc = DateTime.UtcNow;
+		meeting.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
 	}
 
 	// =====================================================================
@@ -338,6 +376,9 @@ public sealed class MeetingService(
 			.FirstOrDefaultAsync(m => m.Id == meetingId, ct)
 			?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
 
+		if (meeting.Status != MeetingStatus.Active)
+			throw new InvalidOperationException($"Meeting {meetingId} is {meeting.Status}; cannot issue a video token.");
+
 		var isMember = meeting.OrganizerId == callerId
 			|| await Db.MeetingAttendees.AnyAsync(a => a.MeetingId == meetingId && a.CollaboratorId == callerId, ct);
 
@@ -391,6 +432,9 @@ public sealed class MeetingService(
 			.FirstOrDefaultAsync(m => m.Id == meetingId, ct)
 			?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
 
+		if (meeting.Status != MeetingStatus.Active)
+			throw new InvalidOperationException($"Meeting {meetingId} is {meeting.Status}; guest link is unavailable.");
+
 		if (!await CanWriteMeetingAsync(meeting, callerId, ct))
 			throw new UnauthorizedAccessException($"Caller {callerId} is not authorized to manage meeting {meetingId}.");
 
@@ -403,6 +447,9 @@ public sealed class MeetingService(
 			.Include(m => m.CalendarEvent)
 			.FirstOrDefaultAsync(m => m.Id == meetingId, ct)
 			?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+
+		if (meeting.Status != MeetingStatus.Active)
+			throw new InvalidOperationException($"Meeting {meetingId} is {meeting.Status}; cannot join.");
 
 		// Constant-time token comparison to prevent timing attacks.
 		var storedBytes = System.Text.Encoding.UTF8.GetBytes(meeting.GuestToken);
@@ -620,6 +667,8 @@ public sealed class MeetingService(
 			RecurrenceRule = meeting.CalendarEvent.RecurrenceRule,
 			IsRecurring = meeting.CalendarEvent.RecurrenceRule is not null,
 			TranscriptionEnabled = meeting.TranscriptionEnabled,
+			Status = meeting.Status,
+			EndedAtUtc = meeting.EndedAtUtc,
 			Attendees = attendees.Select(a => new MeetingAttendeeDto
 			{
 				Id = a.Id,

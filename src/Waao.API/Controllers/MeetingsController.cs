@@ -54,6 +54,17 @@ public class MeetingsController(
 		return NoContent();
 	}
 
+	[HttpPost("{id:guid}/end")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> End(Guid id, CancellationToken ct)
+	{
+		await MeetingService.EndAsync(id, Me, ct);
+		return NoContent();
+	}
+
 	[HttpPost("{id:guid}/rsvp")]
 	[ProducesResponseType(typeof(MeetingDto), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]

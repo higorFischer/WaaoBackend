@@ -22,6 +22,9 @@ public interface IMeetingService
 	/// <summary>Organizer or Admin only. Soft-deletes the meeting, attendees, agenda items, and backing event.</summary>
 	Task CancelAsync(Guid meetingId, Guid callerId, CancellationToken ct = default);
 
+	/// <summary>Organizer or Admin only. Seals the meeting room (Status=Ended) so no further video tokens can be issued.</summary>
+	Task EndAsync(Guid meetingId, Guid callerId, CancellationToken ct = default);
+
 	/// <summary>Caller must be an attendee. Sets their RSVP and stamps RespondedAt.</summary>
 	Task<MeetingDto> SetRsvpAsync(Guid meetingId, SetRsvpDto dto, Guid callerId, CancellationToken ct = default);
 

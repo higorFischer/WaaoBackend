@@ -17,6 +17,8 @@ public record MeetingDto
 	public string? RecurrenceRule { get; init; }
 	public bool IsRecurring { get; init; }
 	public bool TranscriptionEnabled { get; init; }
+	public MeetingStatus Status { get; init; } = MeetingStatus.Active;
+	public DateTime? EndedAtUtc { get; init; }
 	public IReadOnlyList<MeetingAttendeeDto> Attendees { get; init; } = [];
 	public IReadOnlyList<MeetingAgendaItemDto> Agenda { get; init; } = [];
 	public RsvpTallyDto RsvpTally { get; init; } = new();

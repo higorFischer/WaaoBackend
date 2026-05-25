@@ -15,23 +15,26 @@ public sealed class MeetingTranscriptService(WaaoDbContext Db) : IMeetingTranscr
 		if (!meetingExists)
 			throw new KeyNotFoundException($"Meeting {meetingId} not found.");
 
-		// Overwrite: soft-delete any existing transcript (and its lines via cascade is DB-side,
-		// but we soft-delete to preserve the soft-delete invariant)
-		var existing = await Db.MeetingTranscripts
-			.Include(t => t.Lines)
-			.IgnoreQueryFilters()
+		// Append mode: reuse the live transcript when one exists so that re-joining
+		// the same meeting accumulates lines rather than wiping prior content.
+		var transcript = await Db.MeetingTranscripts
 			.FirstOrDefaultAsync(t => t.MeetingId == meetingId, ct);
 
-		if (existing is not null)
+		if (transcript is null)
 		{
-			foreach (var line in existing.Lines)
+			transcript = new MeetingTranscript
 			{
-				line.IsDeleted = true;
-				line.DeletedAt = DateTime.UtcNow;
-			}
-			existing.IsDeleted = true;
-			existing.DeletedAt = DateTime.UtcNow;
-			await Db.SaveChangesAsync(ct);
+				Id = Guid.CreateVersion7(),
+				MeetingId = meetingId,
+				GeneratedAtUtc = DateTime.UtcNow,
+				CreatedAt = DateTime.UtcNow,
+			};
+			Db.MeetingTranscripts.Add(transcript);
+		}
+		else
+		{
+			transcript.GeneratedAtUtc = DateTime.UtcNow;
+			transcript.UpdatedAt = DateTime.UtcNow;
 		}
 
 		// Resolve speakers: keep SpeakerId only when a live collaborator exists
@@ -48,15 +51,6 @@ public sealed class MeetingTranscriptService(WaaoDbContext Db) : IMeetingTranscr
 				.ToListAsync(ct))
 				.ToHashSet()
 			: [];
-
-		var transcript = new MeetingTranscript
-		{
-			Id = Guid.CreateVersion7(),
-			MeetingId = meetingId,
-			GeneratedAtUtc = DateTime.UtcNow,
-			CreatedAt = DateTime.UtcNow,
-		};
-		Db.MeetingTranscripts.Add(transcript);
 
 		var lines = dto.Lines.Select(l => new MeetingTranscriptLine
 		{

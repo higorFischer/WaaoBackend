@@ -31,6 +31,13 @@ public class MeetingConfiguration : IEntityTypeConfiguration<Meeting>
 			.HasMaxLength(64)
 			.HasDefaultValue(string.Empty);
 
+		builder.Property(x => x.Status)
+			.HasConversion<string>()
+			.IsRequired()
+			.HasDefaultValue(MeetingStatus.Active);
+
+		builder.Property(x => x.EndedAtUtc);
+
 		// Unique: one meeting per calendar event (when not deleted)
 		builder.HasIndex(x => x.CalendarEventId)
 			.IsUnique()
