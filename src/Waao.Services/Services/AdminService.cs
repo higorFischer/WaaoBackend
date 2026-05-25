@@ -514,6 +514,27 @@ public sealed class AdminService(
 		return CollaboratorMapper.ToDto(saved);
 	}
 
+	public async Task<CollaboratorDto> AdminVerifyEmailAsync(Guid id, Guid actorId, CancellationToken ct = default)
+	{
+		var c = await Db.Collaborators.FirstOrDefaultAsync(x => x.Id == id, ct)
+			?? throw new KeyNotFoundException($"Collaborator {id} not found.");
+
+		if (c.EmailVerified) goto done;
+
+		c.EmailVerified = true;
+		c.EmailVerifiedAt = DateTime.UtcNow;
+		c.EmailVerificationToken = null;
+		c.EmailVerificationTokenExpiresAt = null;
+		c.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+
+	done:
+		var saved = await Db.Collaborators
+			.Include(x => x.Department).Include(x => x.Role).Include(x => x.Manager).Include(x => x.Badges)
+			.FirstAsync(x => x.Id == id, ct);
+		return CollaboratorMapper.ToDto(saved);
+	}
+
 	public async Task DeleteUserAsync(Guid id, Guid actorId, CancellationToken ct = default)
 	{
 		if (id == actorId)

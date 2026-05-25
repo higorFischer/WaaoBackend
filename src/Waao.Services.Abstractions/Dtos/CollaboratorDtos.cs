@@ -27,6 +27,9 @@ public record CollaboratorDto
 	// Auth role (Collaborator / HR / Admin)
 	public CollaboratorRoleKind RoleKind { get; init; }
 
+	// Email verification state — admins can flip this manually.
+	public bool EmailVerified { get; init; }
+
 	// Soft-delete state (only populated in admin list)
 	public bool IsDeleted { get; init; }
 

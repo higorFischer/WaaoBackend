@@ -45,6 +45,12 @@ public class AdminController(
 	public async Task<IActionResult> AdminSetStatus(Guid id, [FromBody] AdminSetStatusDto dto, CancellationToken ct)
 		=> Ok(await Service.AdminSetStatusAsync(id, dto, Me, ct));
 
+	[HttpPost("users/{id:guid}/verify-email")]
+	[ProducesResponseType(typeof(CollaboratorDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> AdminVerifyEmail(Guid id, CancellationToken ct)
+		=> Ok(await Service.AdminVerifyEmailAsync(id, Me, ct));
+
 	[HttpDelete("users/{id:guid}")]
 	[ProducesResponseType(StatusCodes.Status204NoContent)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]

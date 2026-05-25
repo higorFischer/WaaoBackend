@@ -30,6 +30,7 @@ public static class CollaboratorMapper
 		LongestStreakDays = c.LongestStreakDays,
 		BadgeCount = c.Badges?.Count ?? 0,
 		RoleKind = c.RoleKind,
+		EmailVerified = c.EmailVerified,
 		IsDeleted = c.IsDeleted,
 		IsSuperAdmin = string.Equals(c.Email, AdminService.SuperAdminEmail, StringComparison.OrdinalIgnoreCase),
 	};

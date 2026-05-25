@@ -16,6 +16,7 @@ public interface IAdminService
 	Task<CollaboratorDto> AdminUpdateUserAsync(Guid id, AdminUpdateUserDto dto, Guid actorId, CancellationToken ct = default);
 	Task<CollaboratorDto> AdminResetPasswordAsync(Guid id, AdminResetPasswordDto dto, Guid actorId, CancellationToken ct = default);
 	Task<CollaboratorDto> AdminSetStatusAsync(Guid id, AdminSetStatusDto dto, Guid actorId, CancellationToken ct = default);
+	Task<CollaboratorDto> AdminVerifyEmailAsync(Guid id, Guid actorId, CancellationToken ct = default);
 	Task DeleteUserAsync(Guid id, Guid actorId, CancellationToken ct = default);
 	Task<CollaboratorDto> RestoreUserAsync(Guid id, Guid actorId, CancellationToken ct = default);
 
