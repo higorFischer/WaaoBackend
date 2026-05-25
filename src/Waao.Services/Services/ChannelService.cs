@@ -154,10 +154,24 @@ public sealed class ChannelService(
 
 	public async Task<ChannelDto> CreateChannelAsync(CreateChannelDto dto, Guid creatorId, CancellationToken ct = default)
 	{
+		var name = (dto.Name ?? string.Empty).Trim();
+		if (string.IsNullOrWhiteSpace(name))
+			throw new ArgumentException("Channel name is required.");
+		if (name.Length > 120) name = name[..120];
+
+		// Reject duplicates by name across non-DM channels (case-insensitive).
+		var nameLower = name.ToLower();
+		var duplicate = await Db.Channels.AnyAsync(c =>
+			c.Kind != ChannelKind.DirectMessage
+			&& c.Name != null
+			&& c.Name.ToLower() == nameLower, ct);
+		if (duplicate)
+			throw new InvalidOperationException($"A channel named \"{name}\" already exists.");
+
 		var channel = new Channel
 		{
 			Id = Guid.CreateVersion7(),
-			Name = dto.Name,
+			Name = name,
 			Description = dto.Description,
 			Kind = dto.Kind,
 			Scope = ChannelScope.Custom,
@@ -429,7 +443,23 @@ public sealed class ChannelService(
 		if (!await CanManageChannelAsync(channel, callerId, ct))
 			throw new UnauthorizedAccessException($"Caller {callerId} cannot manage channel {channelId}.");
 
-		if (dto.Name is not null) channel.Name = dto.Name.Trim();
+		if (dto.Name is not null)
+		{
+			var newName = dto.Name.Trim();
+			if (newName.Length == 0) throw new ArgumentException("Channel name is required.");
+			if (newName.Length > 120) newName = newName[..120];
+
+			var lower = newName.ToLower();
+			var collides = await Db.Channels.AnyAsync(c =>
+				c.Id != channel.Id
+				&& c.Kind != ChannelKind.DirectMessage
+				&& c.Name != null
+				&& c.Name.ToLower() == lower, ct);
+			if (collides)
+				throw new InvalidOperationException($"A channel named \"{newName}\" already exists.");
+
+			channel.Name = newName;
+		}
 		if (dto.Description is not null) channel.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
 		if (dto.Kind is ChannelKind newKind)
 		{
