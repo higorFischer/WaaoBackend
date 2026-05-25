@@ -106,7 +106,7 @@ public class AuthController(IAuthService Service) : ControllerBase
 			_            => "bin",
 		};
 		var me = CurrentCollaboratorId();
-		var key = $"avatars/{me:N}/{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.CreateVersion7():N}.{ext}";
+		var key = $"waao/avatars/{me:N}/{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.CreateVersion7():N}.{ext}";
 
 		try
 		{

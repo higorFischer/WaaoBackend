@@ -169,7 +169,7 @@ public class ChannelsController(
 		var safeName = System.IO.Path.GetFileName(file.FileName ?? "file");
 		safeName = string.Concat(safeName.Where(c => char.IsLetterOrDigit(c) || c is '.' or '-' or '_'));
 		if (string.IsNullOrEmpty(safeName)) safeName = "file";
-		var key = $"chat/{id:N}/{DateTime.UtcNow:yyyyMMdd}/{Guid.CreateVersion7():N}-{safeName}";
+		var key = $"waao/chat/{id:N}/{DateTime.UtcNow:yyyyMMdd}/{Guid.CreateVersion7():N}-{safeName}";
 
 		try
 		{
