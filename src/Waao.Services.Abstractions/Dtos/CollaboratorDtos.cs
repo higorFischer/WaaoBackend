@@ -58,6 +58,17 @@ public record CreateCollaboratorDto
 	public Guid? ManagerId { get; init; }
 }
 
+public record UpdateMyProfileDto
+{
+	public string FullName { get; init; } = string.Empty;
+	public string? Bio { get; init; }
+}
+
+public record UpdateMyPhotoDto
+{
+	public string PhotoUrl { get; init; } = string.Empty;
+}
+
 public record UpdateCollaboratorDto
 {
 	public string FullName { get; init; } = string.Empty;

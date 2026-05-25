@@ -67,6 +67,60 @@ public class AuthController(IAuthService Service) : ControllerBase
 		return NoContent();
 	}
 
+	[HttpPut("me/profile")]
+	[Authorize]
+	[ProducesResponseType(typeof(CollaboratorDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateMyProfileDto dto, CancellationToken ct)
+		=> Ok(await Service.UpdateMyProfileAsync(CurrentCollaboratorId(), dto, ct));
+
+	[HttpPost("me/avatar")]
+	[Authorize]
+	[ProducesResponseType(typeof(CollaboratorDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
+	[RequestSizeLimit(8_000_000)]
+	public async Task<IActionResult> UploadAvatar(
+		[FromForm] IFormFile file,
+		[FromServices] Waao.Services.Abstractions.Services.IR2StorageService Storage,
+		[FromServices] ILogger<AuthController> Logger,
+		CancellationToken ct)
+	{
+		if (file is null || file.Length == 0)
+			return BadRequest("Empty file.");
+		if (file.Length > 8_000_000)
+			return StatusCode(StatusCodes.Status413PayloadTooLarge);
+		var mime = file.ContentType ?? "application/octet-stream";
+		if (!mime.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+			return BadRequest("Avatar must be an image.");
+		if (!Storage.IsEnabled)
+			return StatusCode(StatusCodes.Status503ServiceUnavailable, "Storage is not configured.");
+
+		var ext = mime switch
+		{
+			"image/jpeg" => "jpg",
+			"image/png"  => "png",
+			"image/webp" => "webp",
+			"image/heic" => "heic",
+			"image/gif"  => "gif",
+			_            => "bin",
+		};
+		var me = CurrentCollaboratorId();
+		var key = $"avatars/{me:N}/{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.CreateVersion7():N}.{ext}";
+
+		try
+		{
+			using var stream = file.OpenReadStream();
+			var url = await Storage.UploadAsync(key, stream, mime, ct);
+			return Ok(await Service.UpdateMyPhotoAsync(me, url, ct));
+		}
+		catch (Exception ex)
+		{
+			Logger.LogError(ex, "Avatar upload failed user={User} fileName={Name} size={Size}", me, file.FileName, file.Length);
+			return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+		}
+	}
+
 	private Guid CurrentCollaboratorId()
 	{
 		var sub = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");

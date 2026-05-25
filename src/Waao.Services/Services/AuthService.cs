@@ -179,6 +179,42 @@ public sealed class AuthService(
 		return c is null ? null : CollaboratorMapper.ToDto(c);
 	}
 
+	public async Task<CollaboratorDto> UpdateMyProfileAsync(Guid collaboratorId, UpdateMyProfileDto dto, CancellationToken ct = default)
+	{
+		var c = await Db.Collaborators
+			.Include(x => x.Department).Include(x => x.Role)
+			.Include(x => x.Manager).Include(x => x.Badges)
+			.FirstOrDefaultAsync(x => x.Id == collaboratorId, ct)
+			?? throw new KeyNotFoundException($"Collaborator {collaboratorId} not found.");
+
+		var name = (dto.FullName ?? string.Empty).Trim();
+		if (string.IsNullOrWhiteSpace(name))
+			throw new ArgumentException("Full name is required.");
+		if (name.Length > 160) name = name[..160];
+
+		c.FullName = name;
+		c.Bio = string.IsNullOrWhiteSpace(dto.Bio) ? null : dto.Bio.Trim();
+		c.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+
+		return CollaboratorMapper.ToDto(c);
+	}
+
+	public async Task<CollaboratorDto> UpdateMyPhotoAsync(Guid collaboratorId, string photoUrl, CancellationToken ct = default)
+	{
+		var c = await Db.Collaborators
+			.Include(x => x.Department).Include(x => x.Role)
+			.Include(x => x.Manager).Include(x => x.Badges)
+			.FirstOrDefaultAsync(x => x.Id == collaboratorId, ct)
+			?? throw new KeyNotFoundException($"Collaborator {collaboratorId} not found.");
+
+		c.PhotoUrl = string.IsNullOrWhiteSpace(photoUrl) ? null : photoUrl;
+		c.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+
+		return CollaboratorMapper.ToDto(c);
+	}
+
 	private async Task<Collaborator?> LoadByEmail(string email, CancellationToken ct)
 	{
 		var emailLower = email.Trim().ToLowerInvariant();

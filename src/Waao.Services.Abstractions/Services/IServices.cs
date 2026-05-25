@@ -27,6 +27,8 @@ public interface IAuthService
 	Task<AuthResultDto> VerifyEmailAsync(VerifyEmailDto dto, CancellationToken ct = default);
 	Task ResendVerificationAsync(ResendVerificationDto dto, CancellationToken ct = default);
 	Task<AuthResultDto> RefreshAsync(Guid collaboratorId, CancellationToken ct = default);
+	Task<CollaboratorDto> UpdateMyProfileAsync(Guid collaboratorId, UpdateMyProfileDto dto, CancellationToken ct = default);
+	Task<CollaboratorDto> UpdateMyPhotoAsync(Guid collaboratorId, string photoUrl, CancellationToken ct = default);
 }
 
 public interface IGamificationService
