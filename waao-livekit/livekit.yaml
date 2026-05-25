@@ -3,6 +3,19 @@ rtc:
   udp_port: 7882
   tcp_port: 7881
   use_external_ip: true
+  # Push these ICE servers down to every client. Browsers that can't reach the
+  # SFU directly via UDP/TCP fall back to relaying media through coturn.
+  turn_servers:
+    - host: waao-turn.fly.dev
+      port: 5349
+      protocol: tls
+      username: waao
+      credential: 52dbd380e333e80e81d6582c5f87087e9d4f7c5061534ae772d45a930a495a3c
+    - host: waao-turn.fly.dev
+      port: 3478
+      protocol: udp
+      username: waao
+      credential: 52dbd380e333e80e81d6582c5f87087e9d4f7c5061534ae772d45a930a495a3c
 turn:
   enabled: false
 logging:

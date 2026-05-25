@@ -1,0 +1,40 @@
+app = "waao-turn"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  strategy = "immediate"
+
+# TURN-over-TLS (port 5349). Fly Edge terminates TLS with the fly.dev wildcard
+# cert and forwards raw TCP to coturn's listening-port. From the client's
+# perspective this is TLS — passes through restrictive firewalls.
+[[services]]
+  protocol = "tcp"
+  internal_port = 3478
+
+  [[services.ports]]
+    port = 5349
+    handlers = ["tls"]
+
+# TURN-over-TCP (plain) on 3478 as a secondary fallback.
+[[services]]
+  protocol = "tcp"
+  internal_port = 3478
+
+  [[services.ports]]
+    port = 3478
+
+# TURN-over-UDP on 3478 + the relay port range. Direct UDP where the client
+# can reach it; everything else falls back to the TCP/TLS paths above.
+[[services]]
+  protocol = "udp"
+  internal_port = 3478
+
+  [[services.ports]]
+    port = 3478
+
+[[vm]]
+  memory = "512mb"
+  cpus = 1
