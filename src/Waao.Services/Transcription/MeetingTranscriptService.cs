@@ -52,6 +52,10 @@ public sealed class MeetingTranscriptService(WaaoDbContext Db) : IMeetingTranscr
 				.ToHashSet()
 			: [];
 
+		// Fall back to "now" if the agent didn't send a session start (older agent
+		// builds). Treats the whole batch as one fresh session.
+		var sessionStartedAt = dto.RecordingStartedAtUtc ?? DateTime.UtcNow;
+
 		var lines = dto.Lines.Select(l => new MeetingTranscriptLine
 		{
 			Id = Guid.CreateVersion7(),
@@ -62,6 +66,7 @@ public sealed class MeetingTranscriptService(WaaoDbContext Db) : IMeetingTranscr
 			SpeakerName = l.SpeakerName,
 			Text = l.Text,
 			OffsetSeconds = l.OffsetSeconds,
+			RecordingStartedAtUtc = sessionStartedAt,
 			CreatedAt = DateTime.UtcNow,
 		}).ToList();
 
@@ -127,13 +132,17 @@ public sealed class MeetingTranscriptService(WaaoDbContext Db) : IMeetingTranscr
 			GeneratedAtUtc = transcript.GeneratedAtUtc,
 			Lines = transcript.Lines
 				.Where(l => !l.IsDeleted)
-				.OrderBy(l => l.OffsetSeconds)
+				// Order by session (oldest session first), then by offset inside
+				// the session. Lines without a session value sort first.
+				.OrderBy(l => l.RecordingStartedAtUtc ?? DateTime.MinValue)
+				.ThenBy(l => l.OffsetSeconds)
 				.Select(l => new MeetingTranscriptLineDto
 				{
 					SpeakerCollaboratorId = l.SpeakerCollaboratorId,
 					SpeakerName = l.SpeakerName,
 					Text = l.Text,
 					OffsetSeconds = l.OffsetSeconds,
+					RecordingStartedAtUtc = l.RecordingStartedAtUtc,
 				})
 				.ToList(),
 		};

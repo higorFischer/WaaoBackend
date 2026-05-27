@@ -156,6 +156,7 @@ public class MeetingTranscriptLineConfiguration : IEntityTypeConfiguration<Meeti
 			.OnDelete(DeleteBehavior.SetNull);
 
 		builder.HasIndex(x => x.TranscriptId);
+		builder.HasIndex(x => new { x.TranscriptId, x.RecordingStartedAtUtc });
 
 		builder.HasQueryFilter(x => !x.IsDeleted);
 	}
