@@ -28,13 +28,22 @@ public sealed class R2StorageService(
 		// Capture length up front — the AWS SDK may dispose the stream after PutObject.
 		var sizeBytes = buffer.Length;
 
+		// Strip any RFC 7231 media-type parameters (e.g. ";codecs=opus" on a
+		// MediaRecorder webm). The AWS SDK signs Content-Type into the SigV4
+		// canonical request, and Cloudflare R2 normalizes the header before
+		// re-computing the signature — semicolons in the value break that
+		// round-trip and the upload comes back as SignatureDoesNotMatch (500).
+		var safeContentType = contentType;
+		var semi = safeContentType?.IndexOf(';');
+		if (semi.HasValue && semi.Value > 0) safeContentType = safeContentType![..semi.Value].Trim();
+
 		using var s3 = BuildClient();
 		var req = new PutObjectRequest
 		{
 			BucketName            = Options.Bucket,
 			Key                   = key,
 			InputStream           = buffer,
-			ContentType           = contentType,
+			ContentType           = safeContentType,
 			DisablePayloadSigning = true,
 		};
 
