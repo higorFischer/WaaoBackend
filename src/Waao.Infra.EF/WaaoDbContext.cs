@@ -68,6 +68,9 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 	public DbSet<FeatureRequest> FeatureRequests => Set<FeatureRequest>();
 	public DbSet<FeatureRequestVote> FeatureRequestVotes => Set<FeatureRequestVote>();
 
+	// Internal feedback ("what's happening inside the company")
+	public DbSet<Waao.Domain.Models.Entities.Feedback.Feedback> Feedback => Set<Waao.Domain.Models.Entities.Feedback.Feedback>();
+
 	// Messaging — attachments
 	public DbSet<Waao.Domain.Models.Entities.Messaging.MessageAttachment> MessageAttachments => Set<Waao.Domain.Models.Entities.Messaging.MessageAttachment>();
 
