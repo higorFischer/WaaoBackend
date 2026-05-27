@@ -159,9 +159,39 @@ public class ChannelsController(
 			return StatusCode(StatusCodes.Status503ServiceUnavailable, "Attachments are not configured.");
 
 		var mime = file.ContentType ?? "application/octet-stream";
-		var kind = mime.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+		var ext = System.IO.Path.GetExtension(file.FileName ?? string.Empty).ToLowerInvariant();
+
+		// Browsers occasionally drop the MIME (drag-drop from some apps, paste
+		// from clipboard, generic application/octet-stream) — fall back to the
+		// extension so an iPhone photo dropped in still renders as an image,
+		// not as a file icon the user has to click.
+		bool looksLikeImage = mime.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+			|| ext is ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp"
+				or ".heic" or ".heif" or ".avif" or ".svg";
+		bool looksLikeAudio = mime.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)
+			|| ext is ".mp3" or ".m4a" or ".wav" or ".ogg" or ".aac" or ".flac" or ".opus";
+
+		// If the MIME was unknown but the extension says image, promote the
+		// MIME too so the <img> tag actually loads (R2 serves whatever we set).
+		if (looksLikeImage && !mime.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+		{
+			mime = ext switch
+			{
+				".jpg" or ".jpeg" => "image/jpeg",
+				".png" => "image/png",
+				".gif" => "image/gif",
+				".webp" => "image/webp",
+				".heic" or ".heif" => "image/heic",
+				".avif" => "image/avif",
+				".bmp" => "image/bmp",
+				".svg" => "image/svg+xml",
+				_ => mime,
+			};
+		}
+
+		var kind = looksLikeImage
 			? MessageAttachmentKind.Image
-			: mime.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)
+			: looksLikeAudio
 				? MessageAttachmentKind.Audio
 				: MessageAttachmentKind.File;
 
