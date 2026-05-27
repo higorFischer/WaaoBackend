@@ -29,6 +29,7 @@ public interface IAuthService
 	Task<AuthResultDto> RefreshAsync(Guid collaboratorId, CancellationToken ct = default);
 	Task<CollaboratorDto> UpdateMyProfileAsync(Guid collaboratorId, UpdateMyProfileDto dto, CancellationToken ct = default);
 	Task<CollaboratorDto> UpdateMyPhotoAsync(Guid collaboratorId, string photoUrl, CancellationToken ct = default);
+	Task<CollaboratorDto> SetDesktopNotificationsEnabledAsync(Guid collaboratorId, bool enabled, CancellationToken ct = default);
 }
 
 public interface IGamificationService

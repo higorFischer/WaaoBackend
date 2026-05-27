@@ -74,6 +74,17 @@ public class AuthController(IAuthService Service) : ControllerBase
 	public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateMyProfileDto dto, CancellationToken ct)
 		=> Ok(await Service.UpdateMyProfileAsync(CurrentCollaboratorId(), dto, ct));
 
+	public record SetDesktopNotificationsDto(bool Enabled);
+
+	/// <summary>Persists the user's desktop-notification preference so a new
+	/// device knows to auto-prompt the browser permission instead of forcing
+	/// them through Settings again.</summary>
+	[HttpPut("me/desktop-notifications")]
+	[Authorize]
+	[ProducesResponseType(typeof(CollaboratorDto), StatusCodes.Status200OK)]
+	public async Task<IActionResult> SetDesktopNotifications([FromBody] SetDesktopNotificationsDto dto, CancellationToken ct)
+		=> Ok(await Service.SetDesktopNotificationsEnabledAsync(CurrentCollaboratorId(), dto.Enabled, ct));
+
 	[HttpPost("me/avatar")]
 	[Authorize]
 	[ProducesResponseType(typeof(CollaboratorDto), StatusCodes.Status200OK)]

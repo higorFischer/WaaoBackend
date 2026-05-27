@@ -33,6 +33,13 @@ public class Collaborator : Entity
 
 	public bool OptInLeaderboards { get; set; } = true;
 
+	/// <summary>
+	/// Whether the user wants OS-level desktop notifications. Stored
+	/// server-side so signing in on a new browser/device can auto-prompt the
+	/// permission instead of forcing the user to find the toggle in Settings.
+	/// </summary>
+	public bool DesktopNotificationsEnabled { get; set; }
+
 	// Schema migration intentionally deferred to plan Task 7 (ManualXpEconomyReset).
 	public DateTime? OnboardingCompletedAt { get; set; }
 

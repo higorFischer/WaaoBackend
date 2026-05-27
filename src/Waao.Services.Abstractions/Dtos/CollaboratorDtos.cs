@@ -42,6 +42,11 @@ public record CollaboratorDto
 	public int CurrentStreakDays { get; init; }
 	public int LongestStreakDays { get; init; }
 	public int BadgeCount { get; init; }
+
+	/// <summary>User's server-stored preference for OS-level notifications.
+	/// Lets a fresh device know to prompt the browser permission instead of
+	/// making the user dig through Settings to flip it again. </summary>
+	public bool DesktopNotificationsEnabled { get; init; }
 }
 
 public record CreateCollaboratorDto

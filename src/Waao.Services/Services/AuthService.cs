@@ -215,6 +215,21 @@ public sealed class AuthService(
 		return CollaboratorMapper.ToDto(c);
 	}
 
+	public async Task<CollaboratorDto> SetDesktopNotificationsEnabledAsync(Guid collaboratorId, bool enabled, CancellationToken ct = default)
+	{
+		var c = await Db.Collaborators
+			.Include(x => x.Department).Include(x => x.Role)
+			.Include(x => x.Manager).Include(x => x.Badges)
+			.FirstOrDefaultAsync(x => x.Id == collaboratorId, ct)
+			?? throw new KeyNotFoundException($"Collaborator {collaboratorId} not found.");
+
+		c.DesktopNotificationsEnabled = enabled;
+		c.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+
+		return CollaboratorMapper.ToDto(c);
+	}
+
 	private async Task<Collaborator?> LoadByEmail(string email, CancellationToken ct)
 	{
 		var emailLower = email.Trim().ToLowerInvariant();

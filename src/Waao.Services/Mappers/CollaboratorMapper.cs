@@ -33,6 +33,7 @@ public static class CollaboratorMapper
 		EmailVerified = c.EmailVerified,
 		IsDeleted = c.IsDeleted,
 		IsSuperAdmin = string.Equals(c.Email, AdminService.SuperAdminEmail, StringComparison.OrdinalIgnoreCase),
+		DesktopNotificationsEnabled = c.DesktopNotificationsEnabled,
 	};
 
 	public static void Apply(Collaborator entity, CreateCollaboratorDto dto)
