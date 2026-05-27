@@ -2,7 +2,11 @@ port: 7880
 rtc:
   udp_port: 7882
   tcp_port: 7881
-  use_external_ip: true
+  use_external_ip: false
+  # Fly's ingress IPv4 — what clients actually connect to. STUN reports the
+  # outbound NAT IP (50.31.196.140) which is different from this ingress IP,
+  # so we pin it explicitly. Run `fly ips list -a waao-livekit` to verify.
+  node_ip: 149.248.192.36
   # Push these ICE servers down to every client. Browsers that can't reach the
   # SFU directly via UDP/TCP fall back to relaying media through coturn.
   turn_servers:
