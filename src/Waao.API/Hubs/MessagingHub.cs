@@ -13,17 +13,22 @@ public class MessagingHub(WaaoDbContext Db) : Hub
 	{
 		var callerId = GetCallerId();
 
-		// Add the connection to a SignalR group for each channel the caller is a member of
-		var channelIds = await Db.ChannelMembers
+		// Add the connection to a SignalR group for each channel the caller is a
+		// member of, plus the per-user group for personal notifications. Joins
+		// are independent — parallelize so a user in 50 channels does not pay a
+		// 50× sequential await tax on every reconnect.
+		var channelIds = await Db.ChannelMembers.AsNoTracking()
 			.Where(m => m.CollaboratorId == callerId)
 			.Select(m => m.ChannelId)
 			.ToListAsync();
 
+		var joinTasks = new List<Task>(channelIds.Count + 1)
+		{
+			Groups.AddToGroupAsync(Context.ConnectionId, UserGroupName(callerId)),
+		};
 		foreach (var channelId in channelIds)
-			await Groups.AddToGroupAsync(Context.ConnectionId, GroupName(channelId));
-
-		// Add the connection to the per-user group for personal notifications
-		await Groups.AddToGroupAsync(Context.ConnectionId, UserGroupName(callerId));
+			joinTasks.Add(Groups.AddToGroupAsync(Context.ConnectionId, GroupName(channelId)));
+		await Task.WhenAll(joinTasks);
 
 		await base.OnConnectedAsync();
 	}

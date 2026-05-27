@@ -20,6 +20,21 @@ public interface INotificationService
 		CancellationToken ct = default);
 
 	/// <summary>
+	/// Batches notifications for many recipients of the SAME event (e.g. a
+	/// message with N mentions). One SaveChanges, then per-recipient broadcast.
+	/// Skips recipientId == actorId silently.
+	/// </summary>
+	Task CreateManyAsync(
+		IReadOnlyCollection<Guid> recipientIds,
+		NotificationKind kind,
+		string title,
+		string body,
+		string linkType,
+		Guid linkId,
+		Guid? actorId,
+		CancellationToken ct = default);
+
+	/// <summary>
 	/// Returns a list (cap 100, newest first) and the total unread count.
 	/// </summary>
 	Task<NotificationListDto> ListAsync(Guid collaboratorId, bool unreadOnly = false, CancellationToken ct = default);

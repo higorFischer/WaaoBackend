@@ -101,8 +101,12 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
 
 		builder.Property(x => x.EditedAtUtc);
 
-		// Hot path index: history pagination
-		builder.HasIndex(x => new { x.ChannelId, x.CreatedAt });
+		// Hot path: history pagination ALWAYS runs through the !IsDeleted global
+		// filter. A partial index that already excludes deleted rows cuts both
+		// the index size and the planner's row-estimate, which matters a lot for
+		// channel-list unread COUNT(*) and the last-message-per-channel query.
+		builder.HasIndex(x => new { x.ChannelId, x.CreatedAt })
+			.HasFilter("is_deleted = false");
 		builder.HasIndex(x => x.ParentMessageId);
 
 		builder.HasQueryFilter(x => !x.IsDeleted);

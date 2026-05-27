@@ -19,6 +19,7 @@ public sealed class ChannelService(
 	public async Task<IReadOnlyList<ChannelDto>> ListMyChannelsAsync(Guid collaboratorId, CancellationToken ct = default)
 	{
 		var memberships = await Db.ChannelMembers
+			.AsNoTracking()
 			.Include(m => m.Channel)
 			.Where(m => m.CollaboratorId == collaboratorId)
 			.ToListAsync(ct);
@@ -32,9 +33,9 @@ public sealed class ChannelService(
 			.Distinct()
 			.ToList();
 
-		// One round-trip each, sequential (single DbContext can't parallel-query) but
-		// importantly batched — eliminates the prior N+1 over unread counts + DM others.
-		var lastMessages = await Db.Messages
+		// Last message per channel — single grouped query, project only what the
+		// preview needs (not the full body — capped on render).
+		var lastMessages = (await Db.Messages.AsNoTracking()
 			.Where(msg => channelIds.Contains(msg.ChannelId))
 			.GroupBy(msg => msg.ChannelId)
 			.Select(g => new
@@ -43,9 +44,10 @@ public sealed class ChannelService(
 				Body = g.OrderByDescending(m => m.CreatedAt).First().Body,
 				CreatedAt = g.OrderByDescending(m => m.CreatedAt).First().CreatedAt,
 			})
-			.ToListAsync(ct);
+			.ToListAsync(ct))
+			.ToDictionary(x => x.ChannelId, x => x);
 
-		var memberCounts = (await Db.ChannelMembers
+		var memberCounts = (await Db.ChannelMembers.AsNoTracking()
 			.Where(m => channelIds.Contains(m.ChannelId))
 			.GroupBy(m => m.ChannelId)
 			.Select(g => new { ChannelId = g.Key, Count = g.Count() })
@@ -54,7 +56,7 @@ public sealed class ChannelService(
 
 		var lastReadByMsg = lastReadIds.Count == 0
 			? new Dictionary<Guid, DateTime>()
-			: (await Db.Messages.IgnoreQueryFilters()
+			: (await Db.Messages.AsNoTracking().IgnoreQueryFilters()
 				.Where(m => lastReadIds.Contains(m.Id))
 				.Select(m => new { m.Id, m.CreatedAt })
 				.ToListAsync(ct))
@@ -66,38 +68,45 @@ public sealed class ChannelService(
 			.ToList();
 		var otherByChannel = dmChannelIds.Count == 0
 			? new Dictionary<Guid, ChannelMember>()
-			: (await Db.ChannelMembers
+			: (await Db.ChannelMembers.AsNoTracking()
 				.Include(m => m.Collaborator)
 				.Where(m => dmChannelIds.Contains(m.ChannelId) && m.CollaboratorId != collaboratorId)
 				.ToListAsync(ct))
 				.ToDictionary(m => m.ChannelId, m => m);
 
-		// Per-channel "since last-read" count is varied per row, so pull lightweight
-		// (channelId, createdAt) once and bucket in memory.
-		var msgsByChannel = (await Db.Messages
-			.Where(m => channelIds.Contains(m.ChannelId))
-			.Select(m => new { m.ChannelId, m.CreatedAt })
-			.ToListAsync(ct))
-			.GroupBy(m => m.ChannelId)
-			.ToDictionary(g => g.Key, g => g.Select(x => x.CreatedAt).ToList());
+		// Unread count is computed server-side with an indexed COUNT(*) per
+		// channel-with-lastread (CreatedAt > lastRead) and (total) for the rest.
+		// One round-trip total, no pulling-all-timestamps-into-memory.
+		var membershipsWithLastRead = memberships
+			.Where(m => m.LastReadMessageId.HasValue && lastReadByMsg.ContainsKey(m.LastReadMessageId!.Value))
+			.Select(m => new { m.ChannelId, LastReadAt = lastReadByMsg[m.LastReadMessageId!.Value] })
+			.ToList();
+		var channelsWithoutLastRead = memberships
+			.Where(m => !m.LastReadMessageId.HasValue || !lastReadByMsg.ContainsKey(m.LastReadMessageId!.Value))
+			.Select(m => m.ChannelId)
+			.ToList();
+
+		var unreadByChannel = new Dictionary<Guid, int>(memberships.Count);
+		if (channelsWithoutLastRead.Count > 0)
+		{
+			var totals = await Db.Messages.AsNoTracking()
+				.Where(m => channelsWithoutLastRead.Contains(m.ChannelId))
+				.GroupBy(m => m.ChannelId)
+				.Select(g => new { ChannelId = g.Key, Count = g.Count() })
+				.ToListAsync(ct);
+			foreach (var t in totals) unreadByChannel[t.ChannelId] = t.Count;
+		}
+		foreach (var m in membershipsWithLastRead)
+		{
+			unreadByChannel[m.ChannelId] = await Db.Messages.AsNoTracking()
+				.CountAsync(msg => msg.ChannelId == m.ChannelId && msg.CreatedAt > m.LastReadAt, ct);
+		}
 
 		var dtos = new List<ChannelDto>(memberships.Count);
 		foreach (var membership in memberships)
 		{
 			var channel = membership.Channel;
-			var lastMsg = lastMessages.FirstOrDefault(l => l.ChannelId == channel.Id);
-
-			int unreadCount;
-			if (membership.LastReadMessageId is Guid lastReadId && lastReadByMsg.TryGetValue(lastReadId, out var lastReadAt))
-			{
-				unreadCount = msgsByChannel.TryGetValue(channel.Id, out var allMsgs)
-					? allMsgs.Count(t => t > lastReadAt)
-					: 0;
-			}
-			else
-			{
-				unreadCount = msgsByChannel.TryGetValue(channel.Id, out var allMsgs) ? allMsgs.Count : 0;
-			}
+			lastMessages.TryGetValue(channel.Id, out var lastMsg);
 
 			ChannelMemberDto? otherMember = null;
 			if (channel.Kind == ChannelKind.DirectMessage && otherByChannel.TryGetValue(channel.Id, out var other))
@@ -122,7 +131,7 @@ public sealed class ChannelService(
 				CreatedById = channel.CreatedById,
 				MemberCount = memberCounts.GetValueOrDefault(channel.Id, 0),
 				IsMember = true,
-				UnreadCount = unreadCount,
+				UnreadCount = unreadByChannel.GetValueOrDefault(channel.Id, 0),
 				LastMessagePreview = PreviewOf(lastMsg?.Body),
 				LastMessageAtUtc = lastMsg?.CreatedAt,
 				OtherMember = otherMember,

@@ -206,20 +206,19 @@ public sealed class MessageService(
 			}).ToList();
 
 			// Emit notifications — strip mention tokens so the snippet shows @Name, not raw ids.
+			// Single batched insert + parallel SignalR broadcast: a 10-mention message
+			// went from ~10 sequential SaveChanges to one.
 			var plainBody = MentionParser.ToPlainText(dto.Body);
 			var bodySnippet = plainBody.Length > 100 ? plainBody[..100] + "…" : plainBody;
-			foreach (var recipientId in eligibleIds)
-			{
-				await NotificationService.CreateAsync(
-					recipientId,
-					NotificationKind.Mention,
-					$"{author.FullName} mentioned you",
-					bodySnippet,
-					"channel",
-					channelId,
-					authorId,
-					ct);
-			}
+			await NotificationService.CreateManyAsync(
+				eligibleIds,
+				NotificationKind.Mention,
+				$"{author.FullName} mentioned you",
+				bodySnippet,
+				"channel",
+				channelId,
+				authorId,
+				ct);
 		}
 
 		return new MessageDto

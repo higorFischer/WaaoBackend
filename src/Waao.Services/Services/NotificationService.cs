@@ -75,6 +75,80 @@ public sealed class NotificationService(
 	}
 
 	// =====================================================================
+	// CREATE MANY (single SaveChanges)
+	// =====================================================================
+
+	public async Task CreateManyAsync(
+		IReadOnlyCollection<Guid> recipientIds,
+		NotificationKind kind,
+		string title,
+		string body,
+		string linkType,
+		Guid linkId,
+		Guid? actorId,
+		CancellationToken ct = default)
+	{
+		var distinct = recipientIds
+			.Where(id => !actorId.HasValue || id != actorId.Value)
+			.Distinct()
+			.ToList();
+		if (distinct.Count == 0) return;
+
+		string? actorName = null;
+		string? actorPhotoUrl = null;
+		if (actorId.HasValue)
+		{
+			var actor = await Db.Collaborators.AsNoTracking()
+				.Where(c => c.Id == actorId.Value)
+				.Select(c => new { c.FullName, c.PhotoUrl })
+				.FirstOrDefaultAsync(ct);
+			actorName = actor?.FullName;
+			actorPhotoUrl = actor?.PhotoUrl;
+		}
+
+		var now = DateTime.UtcNow;
+		var notifications = distinct.Select(rid => new Notification
+		{
+			Id = Guid.CreateVersion7(),
+			RecipientId = rid,
+			Kind = kind,
+			Title = title,
+			Body = body,
+			LinkType = linkType,
+			LinkId = linkId,
+			ActorId = actorId,
+			IsRead = false,
+			CreatedAt = now,
+		}).ToList();
+
+		Db.Notifications.AddRange(notifications);
+		await Db.SaveChangesAsync(ct);
+
+		// Broadcast after persistence so the client receives a notification it
+		// can also re-fetch from the API and find. Fire-and-forget the per-user
+		// pushes in parallel so a slow SignalR send doesn't serialize the whole
+		// fan-out.
+		var broadcastTasks = notifications.Select(n => Broadcaster.BroadcastAsync(
+			n.RecipientId,
+			new NotificationDto
+			{
+				Id = n.Id,
+				Kind = n.Kind,
+				Title = n.Title,
+				Body = n.Body,
+				LinkType = n.LinkType,
+				LinkId = n.LinkId,
+				ActorId = n.ActorId,
+				ActorName = actorName,
+				ActorPhotoUrl = actorPhotoUrl,
+				IsRead = false,
+				CreatedAtUtc = n.CreatedAt,
+			},
+			ct));
+		await Task.WhenAll(broadcastTasks);
+	}
+
+	// =====================================================================
 	// LIST
 	// =====================================================================
 
@@ -128,19 +202,16 @@ public sealed class NotificationService(
 
 	public async Task MarkAllReadAsync(Guid collaboratorId, CancellationToken ct = default)
 	{
-		var unread = await Db.Notifications
-			.Where(n => n.RecipientId == collaboratorId && !n.IsRead)
-			.ToListAsync(ct);
-
+		// Single UPDATE — no entity hydration, no per-row tracking, one round trip.
 		var now = DateTime.UtcNow;
-		foreach (var n in unread)
-		{
-			n.IsRead = true;
-			n.ReadAt = now;
-			n.UpdatedAt = now;
-		}
-
-		await Db.SaveChangesAsync(ct);
+		await Db.Notifications
+			.Where(n => n.RecipientId == collaboratorId && !n.IsRead)
+			.ExecuteUpdateAsync(
+				s => s
+					.SetProperty(n => n.IsRead, true)
+					.SetProperty(n => n.ReadAt, now)
+					.SetProperty(n => n.UpdatedAt, now),
+				ct);
 	}
 
 	// =====================================================================
