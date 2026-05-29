@@ -135,6 +135,7 @@ public record CollaboratorProjectTimeDto
 {
 	public Guid CollaboratorId { get; init; }
 	public string FullName { get; init; } = string.Empty;
+	public string? DepartmentName { get; init; }
 	public long TotalMinutes { get; init; }
 	public int StintCount { get; init; }
 	public bool Active { get; init; }

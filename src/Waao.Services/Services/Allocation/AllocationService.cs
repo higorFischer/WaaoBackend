@@ -435,9 +435,12 @@ public sealed class AllocationService(
 			?? string.Empty;
 
 		var collaboratorIds = events.Select(e => e.CollaboratorId).Distinct().ToList();
-		var names = await Db.Collaborators.AsNoTracking()
+		var people = await Db.Collaborators.AsNoTracking()
 			.Where(c => collaboratorIds.Contains(c.Id))
-			.ToDictionaryAsync(c => c.Id, c => c.FullName, ct);
+			.Include(c => c.Department)
+			.ToListAsync(ct);
+		var names = people.ToDictionary(c => c.Id, c => c.FullName);
+		var depts = people.ToDictionary(c => c.Id, c => c.Department != null ? c.Department.Name : null);
 
 		var actorIds = events.Where(e => e.ActorId.HasValue).Select(e => e.ActorId!.Value).Distinct().ToList();
 		var actors = await Db.Collaborators.AsNoTracking()
@@ -477,6 +480,7 @@ public sealed class AllocationService(
 				{
 					CollaboratorId = g.Key,
 					FullName = names.TryGetValue(g.Key, out var name) ? name : string.Empty,
+					DepartmentName = depts.TryGetValue(g.Key, out var dept) ? dept : null,
 					TotalMinutes = minutes,
 					StintCount = stints,
 					Active = active,
