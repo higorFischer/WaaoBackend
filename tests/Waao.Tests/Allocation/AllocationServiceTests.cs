@@ -247,4 +247,22 @@ public class AllocationServiceTests
 		var act = () => svc.SetProjectParentAsync(a.Id, new SetParentDto { ParentProjectId = b.Id, X = 0, Y = 0 });
 		await act.Should().ThrowAsync<InvalidOperationException>();
 	}
+
+	[Fact]
+	public async Task ArchiveParent_RehomesChildrenToGrandparent()
+	{
+		var db = TestDb.New();
+		var svc = Build(db);
+		var grand = await svc.CreateProjectAsync(new CreateProjectDto { Title = "Grand" });
+		var parent = await svc.CreateProjectAsync(new CreateProjectDto { Title = "Parent" });
+		var child = await svc.CreateProjectAsync(new CreateProjectDto { Title = "Child" });
+		await svc.SetProjectParentAsync(parent.Id, new SetParentDto { ParentProjectId = grand.Id, X = 0, Y = 0 });
+		await svc.SetProjectParentAsync(child.Id, new SetParentDto { ParentProjectId = parent.Id, X = 0, Y = 0 });
+
+		await svc.ArchiveProjectAsync(parent.Id);
+
+		var board = await svc.GetBoardAsync();
+		board.Projects.Should().NotContain(p => p.Id == parent.Id); // archived, hidden
+		board.Projects.Single(p => p.Id == child.Id).ParentProjectId.Should().Be(grand.Id); // re-homed
+	}
 }

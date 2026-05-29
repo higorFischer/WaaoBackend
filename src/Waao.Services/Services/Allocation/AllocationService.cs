@@ -107,6 +107,16 @@ public sealed class AllocationService(
 	{
 		var project = await Db.Projects.FirstOrDefaultAsync(p => p.Id == projectId, ct)
 			?? throw new KeyNotFoundException($"Project {projectId} not found.");
+
+		// Re-home direct children to this project's parent (or top level) so deleting a
+		// parent never leaves children pointing at an archived box.
+		var children = await Db.Projects.Where(p => p.ParentProjectId == projectId).ToListAsync(ct);
+		foreach (var child in children)
+		{
+			child.ParentProjectId = project.ParentProjectId;
+			child.UpdatedAt = DateTime.UtcNow;
+		}
+
 		project.IsArchived = true;
 		project.UpdatedAt = DateTime.UtcNow;
 		await Db.SaveChangesAsync(ct);
