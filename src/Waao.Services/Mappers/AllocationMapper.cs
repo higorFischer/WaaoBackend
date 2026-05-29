@@ -32,9 +32,19 @@ public static class AllocationMapper
 		Description = p.Description,
 		ColorHex = p.ColorHex,
 		Position = p.Position,
+		PositionX = p.PositionX,
+		PositionY = p.PositionY,
 		Allocations = p.Allocations
 			.OrderBy(a => a.Position)
 			.Select(ToDto)
 			.ToList(),
+	};
+
+	public static ProjectConnectionDto ToDto(ProjectConnection c) => new()
+	{
+		Id = c.Id,
+		SourceProjectId = c.SourceProjectId,
+		TargetProjectId = c.TargetProjectId,
+		Label = c.Label,
 	};
 }

@@ -14,7 +14,9 @@ public sealed class AllocationService(
 	IValidator<CreateProjectDto> CreateProjectValidator,
 	IValidator<UpdateProjectDto> UpdateProjectValidator,
 	IValidator<CreateAllocationDto> CreateAllocationValidator,
-	IValidator<UpdateNoteDto> UpdateNoteValidator) : IAllocationService
+	IValidator<UpdateNoteDto> UpdateNoteValidator,
+	IValidator<CreateConnectionDto> CreateConnectionValidator,
+	IValidator<UpdatePositionDto> UpdatePositionValidator) : IAllocationService
 {
 	public async Task<AllocationBoardDto> GetBoardAsync(CancellationToken ct = default)
 	{
@@ -34,10 +36,16 @@ public sealed class AllocationService(
 			.OrderBy(c => c.FullName)
 			.ToListAsync(ct);
 
+		var connections = await Db.ProjectConnections
+			.AsNoTracking()
+			.Where(c => !c.SourceProject.IsArchived && !c.TargetProject.IsArchived)
+			.ToListAsync(ct);
+
 		return new AllocationBoardDto
 		{
 			Projects = projects.Select(AllocationMapper.ToDto).ToList(),
 			Collaborators = collaborators.Select(AllocationMapper.ToChip).ToList(),
+			Connections = connections.Select(AllocationMapper.ToDto).ToList(),
 		};
 	}
 
@@ -69,6 +77,8 @@ public sealed class AllocationService(
 			Description = dto.Description,
 			ColorHex = string.IsNullOrWhiteSpace(dto.ColorHex) ? "#2A6B7E" : dto.ColorHex!,
 			Position = maxPos + 1,
+			PositionX = (maxPos + 1) % 4 * 280,
+			PositionY = (maxPos + 1) / 4 * 200,
 		};
 		Db.Projects.Add(project);
 		await Db.SaveChangesAsync(ct);
@@ -213,6 +223,56 @@ public sealed class AllocationService(
 			?? throw new KeyNotFoundException($"Allocation {allocationId} not found.");
 		alloc.IsDeleted = true;
 		alloc.DeletedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+	}
+
+	public async Task UpdateProjectPositionAsync(Guid projectId, UpdatePositionDto dto, CancellationToken ct = default)
+	{
+		await UpdatePositionValidator.ValidateAndThrowAsync(dto, ct);
+		var project = await Db.Projects.FirstOrDefaultAsync(p => p.Id == projectId, ct)
+			?? throw new KeyNotFoundException($"Project {projectId} not found.");
+		project.PositionX = dto.X;
+		project.PositionY = dto.Y;
+		project.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+	}
+
+	public async Task<ProjectConnectionDto> CreateConnectionAsync(CreateConnectionDto dto, CancellationToken ct = default)
+	{
+		await CreateConnectionValidator.ValidateAndThrowAsync(dto, ct);
+
+		var projects = await Db.Projects.Where(p => p.Id == dto.SourceProjectId || p.Id == dto.TargetProjectId).ToListAsync(ct);
+		var source = projects.FirstOrDefault(p => p.Id == dto.SourceProjectId) ?? throw new KeyNotFoundException($"Project {dto.SourceProjectId} not found.");
+		var target = projects.FirstOrDefault(p => p.Id == dto.TargetProjectId) ?? throw new KeyNotFoundException($"Project {dto.TargetProjectId} not found.");
+		if (source.IsArchived || target.IsArchived)
+			throw new InvalidOperationException("Cannot connect an archived project.");
+
+		var existing = await Db.ProjectConnections
+			.FirstOrDefaultAsync(c => c.SourceProjectId == dto.SourceProjectId && c.TargetProjectId == dto.TargetProjectId, ct);
+		if (existing != null)
+		{
+			if (dto.Label != null) { existing.Label = dto.Label; existing.UpdatedAt = DateTime.UtcNow; await Db.SaveChangesAsync(ct); }
+			return AllocationMapper.ToDto(existing);
+		}
+
+		var conn = new ProjectConnection
+		{
+			Id = Guid.CreateVersion7(),
+			SourceProjectId = dto.SourceProjectId,
+			TargetProjectId = dto.TargetProjectId,
+			Label = dto.Label,
+		};
+		Db.ProjectConnections.Add(conn);
+		await Db.SaveChangesAsync(ct);
+		return AllocationMapper.ToDto(conn);
+	}
+
+	public async Task RemoveConnectionAsync(Guid connectionId, CancellationToken ct = default)
+	{
+		var conn = await Db.ProjectConnections.FirstOrDefaultAsync(c => c.Id == connectionId, ct)
+			?? throw new KeyNotFoundException($"Connection {connectionId} not found.");
+		conn.IsDeleted = true;
+		conn.DeletedAt = DateTime.UtcNow;
 		await Db.SaveChangesAsync(ct);
 	}
 }

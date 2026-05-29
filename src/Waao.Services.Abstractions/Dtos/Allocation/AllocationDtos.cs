@@ -26,6 +26,8 @@ public record ProjectWithAllocationsDto
 	public string? Description { get; init; }
 	public string ColorHex { get; init; } = "#2A6B7E";
 	public int Position { get; init; }
+	public double PositionX { get; init; }
+	public double PositionY { get; init; }
 	public IReadOnlyList<AllocationDto> Allocations { get; init; } = [];
 }
 
@@ -33,6 +35,28 @@ public record AllocationBoardDto
 {
 	public IReadOnlyList<ProjectWithAllocationsDto> Projects { get; init; } = [];
 	public IReadOnlyList<CollaboratorChipDto> Collaborators { get; init; } = [];
+	public IReadOnlyList<ProjectConnectionDto> Connections { get; init; } = [];
+}
+
+public record ProjectConnectionDto
+{
+	public Guid Id { get; init; }
+	public Guid SourceProjectId { get; init; }
+	public Guid TargetProjectId { get; init; }
+	public string? Label { get; init; }
+}
+
+public record CreateConnectionDto
+{
+	public Guid SourceProjectId { get; init; }
+	public Guid TargetProjectId { get; init; }
+	public string? Label { get; init; }
+}
+
+public record UpdatePositionDto
+{
+	public double X { get; init; }
+	public double Y { get; init; }
 }
 
 public record CreateProjectDto
