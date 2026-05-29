@@ -249,6 +249,24 @@ public class AllocationServiceTests
 	}
 
 	[Fact]
+	public async Task BulkAllocate_AddsNewMembers_SkipsAlreadyAllocated()
+	{
+		var db = TestDb.New();
+		var svc = Build(db);
+		var a = await SeedCollaborator(db, "Ann");
+		var b = await SeedCollaborator(db, "Ben");
+		var proj = await svc.CreateProjectAsync(new CreateProjectDto { Title = "Dept" });
+		await svc.AllocateAsync(new CreateAllocationDto { ProjectId = proj.Id, CollaboratorId = a }, a); // Ann already in
+
+		await svc.BulkAllocateAsync(new BulkAllocateDto { ProjectId = proj.Id, CollaboratorIds = [a, b] }, a);
+
+		var board = await svc.GetBoardAsync();
+		board.Projects.Single().Allocations.Should().HaveCount(2); // Ann (kept) + Ben (added), no dup
+		var hist = await svc.GetProjectHistoryAsync(proj.Id);
+		hist.TotalUsers.Should().Be(2);
+	}
+
+	[Fact]
 	public async Task ArchiveParent_RehomesChildrenToGrandparent()
 	{
 		var db = TestDb.New();

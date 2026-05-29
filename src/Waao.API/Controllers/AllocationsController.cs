@@ -94,6 +94,14 @@ public class AllocationsController(IAllocationService Service) : ControllerBase
 	public async Task<IActionResult> Allocate([FromBody] CreateAllocationDto dto, CancellationToken ct)
 		=> Created(string.Empty, await Service.AllocateAsync(dto, Me, ct));
 
+	[HttpPost("bulk")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	public async Task<IActionResult> BulkAllocate([FromBody] BulkAllocateDto dto, CancellationToken ct)
+	{
+		await Service.BulkAllocateAsync(dto, Me, ct);
+		return NoContent();
+	}
+
 	[HttpPut("{id:guid}/move")]
 	[ProducesResponseType(typeof(AllocationDto), StatusCodes.Status200OK)]
 	public async Task<IActionResult> Move(Guid id, [FromBody] MoveAllocationDto dto, CancellationToken ct)

@@ -92,6 +92,12 @@ public record MoveAllocationDto
 	public int Position { get; init; }
 }
 
+public record BulkAllocateDto
+{
+	public Guid ProjectId { get; init; }
+	public IReadOnlyList<Guid> CollaboratorIds { get; init; } = [];
+}
+
 public record UpdateNoteDto
 {
 	public string? Note { get; init; }

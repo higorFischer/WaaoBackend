@@ -177,6 +177,45 @@ public sealed class AllocationService(
 		return AllocationMapper.ToDto(alloc);
 	}
 
+	public async Task BulkAllocateAsync(BulkAllocateDto dto, Guid currentCollaboratorId, CancellationToken ct = default)
+	{
+		var project = await Db.Projects.FirstOrDefaultAsync(p => p.Id == dto.ProjectId, ct)
+			?? throw new KeyNotFoundException($"Project {dto.ProjectId} not found.");
+		if (project.IsArchived)
+			throw new InvalidOperationException("Cannot allocate to an archived project.");
+
+		var ids = dto.CollaboratorIds.Distinct().ToList();
+		if (ids.Count == 0)
+			return;
+
+		var alreadyIn = (await Db.ProjectAllocations
+			.Where(a => a.ProjectId == dto.ProjectId && ids.Contains(a.CollaboratorId))
+			.Select(a => a.CollaboratorId)
+			.ToListAsync(ct)).ToHashSet();
+
+		var maxPos = await Db.ProjectAllocations.Where(a => a.ProjectId == dto.ProjectId)
+			.Select(a => (int?)a.Position).MaxAsync(ct) ?? -1;
+
+		foreach (var collaboratorId in ids)
+		{
+			if (alreadyIn.Contains(collaboratorId))
+				continue;
+			maxPos++;
+			Db.ProjectAllocations.Add(new ProjectAllocation
+			{
+				Id = Guid.CreateVersion7(),
+				ProjectId = dto.ProjectId,
+				CollaboratorId = collaboratorId,
+				Position = maxPos,
+				AllocatedAt = DateTime.UtcNow,
+				AllocatedById = currentCollaboratorId,
+			});
+			RecordEvent(collaboratorId, project, AllocationEventType.Assigned, currentCollaboratorId);
+		}
+
+		await Db.SaveChangesAsync(ct);
+	}
+
 	public async Task<AllocationDto> MoveAllocationAsync(Guid allocationId, MoveAllocationDto dto, CancellationToken ct = default)
 	{
 		var alloc = await Db.ProjectAllocations

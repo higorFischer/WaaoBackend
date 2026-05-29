@@ -13,6 +13,7 @@ public interface IAllocationService
 	Task ReorderProjectsAsync(ReorderProjectsDto dto, CancellationToken ct = default);
 
 	Task<AllocationDto> AllocateAsync(CreateAllocationDto dto, Guid currentCollaboratorId, CancellationToken ct = default);
+	Task BulkAllocateAsync(BulkAllocateDto dto, Guid currentCollaboratorId, CancellationToken ct = default);
 	Task<AllocationDto> MoveAllocationAsync(Guid allocationId, MoveAllocationDto dto, CancellationToken ct = default);
 	Task<AllocationDto> UpdateNoteAsync(Guid allocationId, UpdateNoteDto dto, CancellationToken ct = default);
 	Task RemoveAllocationAsync(Guid allocationId, CancellationToken ct = default);
