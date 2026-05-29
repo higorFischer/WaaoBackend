@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Waao.Domain.Models.Entities;
+using Waao.Domain.Models.Entities.Allocation;
 using Waao.Domain.Models.Entities.Calendar;
 using Waao.Domain.Models.Entities.FeatureRequests;
 using Waao.Domain.Models.Entities.Kanban;
@@ -63,6 +64,10 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 	public DbSet<CardChecklist> CardChecklists => Set<CardChecklist>();
 	public DbSet<CardChecklistItem> CardChecklistItems => Set<CardChecklistItem>();
 	public DbSet<CardActivity> CardActivities => Set<CardActivity>();
+
+	// ----- Allocation board -----
+	public DbSet<Project> Projects => Set<Project>();
+	public DbSet<ProjectAllocation> ProjectAllocations => Set<ProjectAllocation>();
 
 	// Feature requests
 	public DbSet<FeatureRequest> FeatureRequests => Set<FeatureRequest>();
