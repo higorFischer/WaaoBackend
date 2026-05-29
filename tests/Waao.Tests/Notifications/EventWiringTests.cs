@@ -28,7 +28,7 @@ public class EventWiringTests
 		var broadcaster = new CapturingBroadcaster();
 		var notifSvc = new NotificationService(db, broadcaster, NullPushNotificationService.Instance, NullLogger<NotificationService>.Instance);
 		var chSvc = new ChannelService(db, notifSvc);
-		var msgSvc = new MessageService(db, notifSvc, NullPushNotificationService.Instance, NullLogger<MessageService>.Instance);
+		var msgSvc = new MessageService(db, notifSvc, NullPushNotificationService.Instance, NullPresenceTracker.Instance, NullLogger<MessageService>.Instance);
 		var calSvc = new CalendarService(db);
 		var meetingSvc = new MeetingService(db, calSvc, notifSvc, NullLiveKitTokenService.Instance, Options.Create(new LiveKitOptions()));
 		return (msgSvc, chSvc, meetingSvc, notifSvc, broadcaster, db);

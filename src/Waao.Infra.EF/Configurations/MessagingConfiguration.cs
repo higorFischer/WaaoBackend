@@ -63,6 +63,8 @@ public class ChannelMemberConfiguration : IEntityTypeConfiguration<ChannelMember
 			.HasForeignKey(x => x.LastReadMessageId)
 			.OnDelete(DeleteBehavior.SetNull);
 
+		builder.Property(x => x.IsMuted).HasDefaultValue(false);
+
 		// Unique: one row per (channel, collaborator) when not deleted
 		builder.HasIndex(x => new { x.ChannelId, x.CollaboratorId })
 			.IsUnique()

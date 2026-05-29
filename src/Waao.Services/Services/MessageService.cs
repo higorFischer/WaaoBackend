@@ -14,6 +14,7 @@ public sealed class MessageService(
 	WaaoDbContext Db,
 	INotificationService NotificationService,
 	IPushNotificationService Push,
+	IPresenceTracker Presence,
 	ILogger<MessageService> Logger) : IMessageService
 {
 	// =====================================================================
@@ -228,10 +229,17 @@ public sealed class MessageService(
 		// already @mentioned — they got the mention push). No bell-Notification entry, just push.
 		try
 		{
-			var pushRecipients = await Db.ChannelMembers
+			var members = await Db.ChannelMembers
 				.Where(m => m.ChannelId == channelId && m.CollaboratorId != authorId && !mentionedIds.Contains(m.CollaboratorId))
-				.Select(m => m.CollaboratorId)
+				.Select(m => new { m.CollaboratorId, m.IsMuted })
 				.ToListAsync(ct);
+
+			// Skip muted members, and skip anyone currently viewing this channel (their
+			// presence connection has the channel active — they'll see it live).
+			var pushRecipients = members
+				.Where(m => !m.IsMuted && !Presence.IsActive(m.CollaboratorId, channelId))
+				.Select(m => m.CollaboratorId)
+				.ToList();
 
 			if (pushRecipients.Count > 0)
 			{

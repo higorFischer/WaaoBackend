@@ -11,5 +11,7 @@ public class ChannelMember : Entity
 	public Guid? LastReadMessageId { get; set; }
 	public virtual Message? LastReadMessage { get; set; }
 
+	public bool IsMuted { get; set; }
+
 	public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
 }

@@ -124,6 +124,7 @@ builder.Services.AddSingleton<ILiveKitTokenService, LiveKitTokenService>();
 builder.Services.Configure<Waao.Services.Transcription.TranscriptionOptions>(builder.Configuration.GetSection("Transcription"));
 
 // Messaging
+builder.Services.AddSingleton<IPresenceTracker, Waao.Services.Presence.PresenceTracker>();
 builder.Services.AddScoped<IChannelService, ChannelService>();
 builder.Services.AddScoped<IMessageService, MessageService>();
 builder.Services.AddSignalR();

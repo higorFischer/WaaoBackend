@@ -28,6 +28,9 @@ public interface IChannelService
 	/// <summary>Sets LastReadMessageId for the caller's membership in the channel.</summary>
 	Task MarkReadAsync(Guid channelId, MarkReadDto dto, Guid collaboratorId, CancellationToken ct = default);
 
+	/// <summary>Mutes or unmutes the channel for the caller (suppresses OS push). Caller must be a member.</summary>
+	Task<ChannelDto> SetMutedAsync(Guid channelId, Guid collaboratorId, bool muted, CancellationToken ct = default);
+
 	/// <summary>Returns the members of a channel. Caller must be a member.</summary>
 	Task<IReadOnlyList<ChannelMemberDto>> GetMembersAsync(Guid channelId, Guid callerId, CancellationToken ct = default);
 

@@ -106,6 +106,12 @@ public class ChannelsController(
 		return NoContent();
 	}
 
+	[HttpPut("{id:guid}/mute")]
+	[ProducesResponseType(typeof(ChannelDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> SetMuted(Guid id, [FromBody] SetMutedDto dto, CancellationToken ct)
+		=> Ok(await ChannelService.SetMutedAsync(id, Me, dto.Muted, ct));
+
 	[HttpGet("{id:guid}/messages")]
 	[ProducesResponseType(typeof(MessagePageDto), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]

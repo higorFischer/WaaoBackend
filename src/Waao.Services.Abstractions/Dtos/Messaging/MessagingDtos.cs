@@ -35,6 +35,7 @@ public record ChannelDto
 	public Guid CreatedById { get; init; }
 	public int MemberCount { get; init; }
 	public bool IsMember { get; init; }
+	public bool IsMuted { get; init; }
 	public int UnreadCount { get; init; }
 	public string? LastMessagePreview { get; init; }
 	public DateTime? LastMessageAtUtc { get; init; }
@@ -103,6 +104,11 @@ public record EditMessageDto
 public record MarkReadDto
 {
 	public Guid LastReadMessageId { get; init; }
+}
+
+public record SetMutedDto
+{
+	public bool Muted { get; init; }
 }
 
 public record MessagePageDto

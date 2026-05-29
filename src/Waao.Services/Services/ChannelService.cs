@@ -131,6 +131,7 @@ public sealed class ChannelService(
 				CreatedById = channel.CreatedById,
 				MemberCount = memberCounts.GetValueOrDefault(channel.Id, 0),
 				IsMember = true,
+				IsMuted = membership.IsMuted,
 				UnreadCount = unreadByChannel.GetValueOrDefault(channel.Id, 0),
 				LastMessagePreview = PreviewOf(lastMsg?.Body),
 				LastMessageAtUtc = lastMsg?.CreatedAt,
@@ -435,6 +436,24 @@ public sealed class ChannelService(
 	}
 
 	// =====================================================================
+	// SET MUTED
+	// =====================================================================
+
+	public async Task<ChannelDto> SetMutedAsync(Guid channelId, Guid collaboratorId, bool muted, CancellationToken ct = default)
+	{
+		var member = await Db.ChannelMembers
+			.FirstOrDefaultAsync(m => m.ChannelId == channelId && m.CollaboratorId == collaboratorId, ct)
+			?? throw new KeyNotFoundException($"You are not a member of channel {channelId}.");
+
+		member.IsMuted = muted;
+		member.UpdatedAt = DateTime.UtcNow;
+
+		await Db.SaveChangesAsync(ct);
+
+		return await BuildChannelDtoAsync(channelId, collaboratorId, ct);
+	}
+
+	// =====================================================================
 	// GET MEMBERS
 	// =====================================================================
 
@@ -674,6 +693,7 @@ public sealed class ChannelService(
 			CreatedById = channel.CreatedById,
 			MemberCount = members.Count,
 			IsMember = isMember,
+			IsMuted = callerMembership?.IsMuted ?? false,
 			UnreadCount = unreadCount,
 			LastMessagePreview = PreviewOf(lastMsg?.Body),
 			LastMessageAtUtc = lastMsg?.CreatedAt,

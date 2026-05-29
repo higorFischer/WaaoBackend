@@ -3,11 +3,12 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Waao.Infra.EF;
+using Waao.Services.Abstractions.Services;
 
 namespace Waao.API.Hubs;
 
 [Authorize]
-public class MessagingHub(WaaoDbContext Db) : Hub
+public class MessagingHub(WaaoDbContext Db, IPresenceTracker Presence) : Hub
 {
 	public override async Task OnConnectedAsync()
 	{
@@ -31,6 +32,27 @@ public class MessagingHub(WaaoDbContext Db) : Hub
 		await Task.WhenAll(joinTasks);
 
 		await base.OnConnectedAsync();
+	}
+
+	public override async Task OnDisconnectedAsync(Exception? exception)
+	{
+		Presence.Remove(Context.ConnectionId);
+		await base.OnDisconnectedAsync(exception);
+	}
+
+	/// <summary>Marks the caller's connection as actively viewing a channel, so MessageService
+	/// suppresses the OS push for new messages there (they're already looking at it).</summary>
+	public Task SetActiveChannel(Guid channelId)
+	{
+		Presence.SetActive(Context.ConnectionId, GetCallerId(), channelId);
+		return Task.CompletedTask;
+	}
+
+	/// <summary>Clears the caller's active-channel marker (e.g. tab blur / navigated away).</summary>
+	public Task ClearActiveChannel()
+	{
+		Presence.Remove(Context.ConnectionId);
+		return Task.CompletedTask;
 	}
 
 	public async Task JoinChannelGroup(Guid channelId)
