@@ -47,3 +47,28 @@ public class ProjectAllocationConfiguration : IEntityTypeConfiguration<ProjectAl
 		builder.HasQueryFilter(x => !x.IsDeleted);
 	}
 }
+
+public class ProjectConnectionConfiguration : IEntityTypeConfiguration<ProjectConnection>
+{
+	public void Configure(EntityTypeBuilder<ProjectConnection> builder)
+	{
+		builder.HasKey(x => x.Id);
+		builder.Property(x => x.Label).HasMaxLength(120);
+
+		builder.HasOne(x => x.SourceProject)
+			.WithMany(p => p.OutgoingConnections)
+			.HasForeignKey(x => x.SourceProjectId)
+			.OnDelete(DeleteBehavior.Cascade);
+
+		builder.HasOne(x => x.TargetProject)
+			.WithMany()
+			.HasForeignKey(x => x.TargetProjectId)
+			.OnDelete(DeleteBehavior.Restrict);
+
+		builder.HasIndex(x => new { x.SourceProjectId, x.TargetProjectId })
+			.IsUnique()
+			.HasFilter("is_deleted = false");
+
+		builder.HasQueryFilter(x => !x.IsDeleted);
+	}
+}

@@ -8,7 +8,11 @@ public class Project : Entity
 	public int Position { get; set; }
 	public bool IsArchived { get; set; }
 
+	public double PositionX { get; set; }
+	public double PositionY { get; set; }
+
 	public virtual ICollection<ProjectAllocation> Allocations { get; set; } = [];
+	public virtual ICollection<ProjectConnection> OutgoingConnections { get; set; } = [];
 }
 
 public class ProjectAllocation : Entity
