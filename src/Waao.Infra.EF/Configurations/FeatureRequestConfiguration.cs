@@ -58,3 +58,28 @@ public class FeatureRequestVoteConfiguration : IEntityTypeConfiguration<FeatureR
 		builder.HasQueryFilter(x => !x.IsDeleted);
 	}
 }
+
+public class FeatureRequestCommentConfiguration : IEntityTypeConfiguration<FeatureRequestComment>
+{
+	public void Configure(EntityTypeBuilder<FeatureRequestComment> builder)
+	{
+		builder.ToTable("feature_request_comments");
+		builder.HasKey(x => x.Id);
+
+		builder.Property(x => x.Body).IsRequired().HasMaxLength(2000);
+
+		builder.HasOne(x => x.FeatureRequest)
+			.WithMany(r => r.Comments)
+			.HasForeignKey(x => x.FeatureRequestId)
+			.OnDelete(DeleteBehavior.Cascade);
+
+		builder.HasOne(x => x.Author)
+			.WithMany()
+			.HasForeignKey(x => x.AuthorId)
+			.OnDelete(DeleteBehavior.Restrict);
+
+		builder.HasIndex(x => new { x.FeatureRequestId, x.CreatedAt });
+
+		builder.HasQueryFilter(x => !x.IsDeleted);
+	}
+}

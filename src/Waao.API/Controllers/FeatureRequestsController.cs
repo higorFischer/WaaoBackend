@@ -37,4 +37,29 @@ public class FeatureRequestsController(IFeatureRequestService Service) : Control
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateFeatureRequestStatusDto dto, CancellationToken ct)
 		=> Ok(await Service.UpdateStatusAsync(id, dto, Me, ct));
+
+	[HttpPut("{id:guid}")]
+	[ProducesResponseType(typeof(FeatureRequestDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> Update(Guid id, [FromBody] UpdateFeatureRequestDto dto, CancellationToken ct)
+		=> Ok(await Service.UpdateAsync(id, dto, Me, ct));
+
+	[HttpGet("{id:guid}/comments")]
+	[ProducesResponseType(typeof(IReadOnlyList<FeatureRequestCommentDto>), StatusCodes.Status200OK)]
+	public async Task<IActionResult> ListComments(Guid id, CancellationToken ct)
+		=> Ok(await Service.ListCommentsAsync(id, ct));
+
+	[HttpPost("{id:guid}/comments")]
+	[ProducesResponseType(typeof(FeatureRequestCommentDto), StatusCodes.Status201Created)]
+	public async Task<IActionResult> AddComment(Guid id, [FromBody] CreateFeatureRequestCommentDto dto, CancellationToken ct)
+		=> Created(string.Empty, await Service.AddCommentAsync(id, dto, Me, ct));
+
+	[HttpDelete("comments/{commentId:guid}")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	public async Task<IActionResult> DeleteComment(Guid commentId, CancellationToken ct)
+	{
+		await Service.DeleteCommentAsync(commentId, Me, ct);
+		return NoContent();
+	}
 }
