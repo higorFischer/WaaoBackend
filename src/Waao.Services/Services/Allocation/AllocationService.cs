@@ -259,10 +259,13 @@ public sealed class AllocationService(
 			var chain = await Db.Projects.Select(p => new { p.Id, p.ParentProjectId }).ToListAsync(ct);
 			var map = chain.ToDictionary(x => x.Id, x => x.ParentProjectId);
 			var cursor = (Guid?)parentId;
+			var visited = new HashSet<Guid>();
 			while (cursor is { } c)
 			{
 				if (c == projectId)
 					throw new InvalidOperationException("Nesting would create a cycle.");
+				if (!visited.Add(c))
+					break;
 				cursor = map.TryGetValue(c, out var next) ? next : null;
 			}
 		}
