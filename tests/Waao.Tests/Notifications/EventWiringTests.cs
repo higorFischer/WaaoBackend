@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Waao.Domain.Models.Entities;
 using Waao.Domain.Models.Entities.Calendar;
@@ -25,7 +26,7 @@ public class EventWiringTests
 	{
 		var db = TestDb.New();
 		var broadcaster = new CapturingBroadcaster();
-		var notifSvc = new NotificationService(db, broadcaster);
+		var notifSvc = new NotificationService(db, broadcaster, NullPushNotificationService.Instance, NullLogger<NotificationService>.Instance);
 		var chSvc = new ChannelService(db, notifSvc);
 		var msgSvc = new MessageService(db, notifSvc);
 		var calSvc = new CalendarService(db);

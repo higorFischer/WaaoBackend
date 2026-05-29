@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Waao.Domain.Models.Entities;
 using Waao.Domain.Models.Enums;
 using Waao.Services.Services;
@@ -15,7 +16,7 @@ public class NotificationServiceTests
 	{
 		var db = TestDb.New();
 		var broadcaster = new CapturingBroadcaster();
-		var svc = new NotificationService(db, broadcaster);
+		var svc = new NotificationService(db, broadcaster, NullPushNotificationService.Instance, NullLogger<NotificationService>.Instance);
 		return (svc, db, broadcaster);
 	}
 

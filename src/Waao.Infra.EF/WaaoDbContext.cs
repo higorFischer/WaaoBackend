@@ -51,6 +51,7 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 
 	// Notifications
 	public DbSet<Notification> Notifications => Set<Notification>();
+	public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
 
 	// Kanban
 	public DbSet<Board> Boards => Set<Board>();

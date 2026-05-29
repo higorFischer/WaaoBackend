@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Waao.Domain.Models.Entities.Notifications;
 using Waao.Domain.Models.Enums;
 using Waao.Infra.EF;
@@ -9,7 +10,9 @@ namespace Waao.Services.Services;
 
 public sealed class NotificationService(
 	WaaoDbContext Db,
-	INotificationBroadcaster Broadcaster) : INotificationService
+	INotificationBroadcaster Broadcaster,
+	IPushNotificationService Push,
+	ILogger<NotificationService> Logger) : INotificationService
 {
 	// =====================================================================
 	// CREATE
@@ -72,6 +75,8 @@ public sealed class NotificationService(
 		};
 
 		await Broadcaster.BroadcastAsync(recipientId, dto, ct);
+
+		await TrySendPushAsync(recipientId, title, body, linkType, linkId, ct);
 	}
 
 	// =====================================================================
@@ -146,6 +151,10 @@ public sealed class NotificationService(
 			},
 			ct));
 		await Task.WhenAll(broadcastTasks);
+
+		var pushTasks = notifications.Select(n =>
+			TrySendPushAsync(n.RecipientId, n.Title, n.Body, n.LinkType, n.LinkId, ct));
+		await Task.WhenAll(pushTasks);
 	}
 
 	// =====================================================================
@@ -231,5 +240,34 @@ public sealed class NotificationService(
 		ActorPhotoUrl = n.Actor?.PhotoUrl,
 		IsRead = n.IsRead,
 		CreatedAtUtc = n.CreatedAt,
+	};
+
+	/// <summary>
+	/// Best-effort background push delivery. Push is a "nice to have" on top of the
+	/// persisted + broadcast notification, so a failure here must NEVER bubble up and
+	/// break notification creation.
+	/// </summary>
+	private async Task TrySendPushAsync(Guid recipientId, string title, string body, string linkType, Guid linkId, CancellationToken ct)
+	{
+		try
+		{
+			await Push.SendToCollaboratorAsync(recipientId, title, body, BuildUrl(linkType, linkId), ct);
+		}
+		catch (Exception ex)
+		{
+			Logger.LogWarning(ex, "Web Push delivery failed for recipient {RecipientId}.", recipientId);
+		}
+	}
+
+	/// <summary>
+	/// Maps a notification's link target to a frontend route the service worker opens on click.
+	/// Mirrors the SPA routes (/messages, /meetings, /feature-requests).
+	/// </summary>
+	private static string BuildUrl(string linkType, Guid linkId) => linkType switch
+	{
+		"channel" => $"/messages?channel={linkId}",
+		"meeting" => $"/meetings?meeting={linkId}",
+		"feature-request" => "/feature-requests",
+		_ => "/",
 	};
 }

@@ -129,7 +129,9 @@ builder.Services.AddScoped<IMessageService, MessageService>();
 builder.Services.AddSignalR();
 
 // Notifications
+builder.Services.Configure<Waao.Services.Push.VapidOptions>(builder.Configuration.GetSection("Vapid"));
 builder.Services.AddScoped<INotificationBroadcaster, SignalRNotificationBroadcaster>();
+builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // Documentation viewer (clones WaaoDocs locally + serves to frontend)

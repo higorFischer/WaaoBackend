@@ -39,6 +39,29 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
 	}
 }
 
+public class PushSubscriptionConfiguration : IEntityTypeConfiguration<PushSubscription>
+{
+	public void Configure(EntityTypeBuilder<PushSubscription> builder)
+	{
+		builder.ToTable("push_subscriptions");
+		builder.HasKey(x => x.Id);
+
+		builder.Property(x => x.Endpoint).IsRequired().HasMaxLength(500);
+		builder.Property(x => x.P256dh).IsRequired().HasMaxLength(300);
+		builder.Property(x => x.Auth).IsRequired().HasMaxLength(300);
+		builder.Property(x => x.UserAgent).HasMaxLength(400);
+
+		// One live subscription per endpoint
+		builder.HasIndex(x => x.Endpoint)
+			.IsUnique()
+			.HasFilter("is_deleted = false");
+
+		builder.HasIndex(x => x.CollaboratorId);
+
+		builder.HasQueryFilter(x => !x.IsDeleted);
+	}
+}
+
 public class MessageMentionConfiguration : IEntityTypeConfiguration<Domain.Models.Entities.Messaging.MessageMention>
 {
 	public void Configure(EntityTypeBuilder<Domain.Models.Entities.Messaging.MessageMention> builder)
