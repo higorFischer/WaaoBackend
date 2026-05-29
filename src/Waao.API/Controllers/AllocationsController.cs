@@ -55,6 +55,30 @@ public class AllocationsController(IAllocationService Service) : ControllerBase
 		return NoContent();
 	}
 
+	[HttpPut("projects/{id:guid}/position")]
+	[Authorize(Policy = "Admin")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	public async Task<IActionResult> UpdatePosition(Guid id, [FromBody] UpdatePositionDto dto, CancellationToken ct)
+	{
+		await Service.UpdateProjectPositionAsync(id, dto, ct);
+		return NoContent();
+	}
+
+	[HttpPost("connections")]
+	[Authorize(Policy = "Admin")]
+	[ProducesResponseType(typeof(ProjectConnectionDto), StatusCodes.Status201Created)]
+	public async Task<IActionResult> CreateConnection([FromBody] CreateConnectionDto dto, CancellationToken ct)
+		=> Created(string.Empty, await Service.CreateConnectionAsync(dto, ct));
+
+	[HttpDelete("connections/{id:guid}")]
+	[Authorize(Policy = "Admin")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	public async Task<IActionResult> RemoveConnection(Guid id, CancellationToken ct)
+	{
+		await Service.RemoveConnectionAsync(id, ct);
+		return NoContent();
+	}
+
 	// ----- Allocations (any collaborator) -----
 	[HttpPost]
 	[ProducesResponseType(typeof(AllocationDto), StatusCodes.Status201Created)]

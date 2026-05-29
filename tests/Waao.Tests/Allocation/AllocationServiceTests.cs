@@ -13,7 +13,8 @@ public class AllocationServiceTests
 {
 	private static AllocationService Build(Waao.Infra.EF.WaaoDbContext db) =>
 		new(db, new CreateProjectValidator(), new UpdateProjectValidator(),
-			new CreateAllocationValidator(), new UpdateNoteValidator());
+			new CreateAllocationValidator(), new UpdateNoteValidator(),
+			new CreateConnectionValidator(), new UpdatePositionValidator());
 
 	private static async Task<Guid> SeedCollaborator(Waao.Infra.EF.WaaoDbContext db, string name)
 	{
@@ -131,5 +132,62 @@ public class AllocationServiceTests
 
 		var board = await svc.GetBoardAsync();
 		board.Projects.Single().Allocations.Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task CreateConnection_ThenBoard_ReturnsEdge()
+	{
+		var db = TestDb.New();
+		var svc = Build(db);
+		var p1 = await svc.CreateProjectAsync(new CreateProjectDto { Title = "A" });
+		var p2 = await svc.CreateProjectAsync(new CreateProjectDto { Title = "B" });
+
+		await svc.CreateConnectionAsync(new CreateConnectionDto { SourceProjectId = p1.Id, TargetProjectId = p2.Id, Label = "depends" });
+		var board = await svc.GetBoardAsync();
+
+		board.Connections.Should().ContainSingle(c => c.SourceProjectId == p1.Id && c.TargetProjectId == p2.Id && c.Label == "depends");
+	}
+
+	[Fact]
+	public async Task CreateConnection_Duplicate_IsIdempotent()
+	{
+		var db = TestDb.New();
+		var svc = Build(db);
+		var p1 = await svc.CreateProjectAsync(new CreateProjectDto { Title = "A" });
+		var p2 = await svc.CreateProjectAsync(new CreateProjectDto { Title = "B" });
+
+		var first = await svc.CreateConnectionAsync(new CreateConnectionDto { SourceProjectId = p1.Id, TargetProjectId = p2.Id });
+		var second = await svc.CreateConnectionAsync(new CreateConnectionDto { SourceProjectId = p1.Id, TargetProjectId = p2.Id, Label = "x" });
+
+		second.Id.Should().Be(first.Id);
+		(await svc.GetBoardAsync()).Connections.Should().ContainSingle();
+	}
+
+	[Fact]
+	public async Task RemoveConnection_DropsEdgeFromBoard()
+	{
+		var db = TestDb.New();
+		var svc = Build(db);
+		var p1 = await svc.CreateProjectAsync(new CreateProjectDto { Title = "A" });
+		var p2 = await svc.CreateProjectAsync(new CreateProjectDto { Title = "B" });
+		var c = await svc.CreateConnectionAsync(new CreateConnectionDto { SourceProjectId = p1.Id, TargetProjectId = p2.Id });
+
+		await svc.RemoveConnectionAsync(c.Id);
+
+		(await svc.GetBoardAsync()).Connections.Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task UpdatePosition_PersistsOnBoard()
+	{
+		var db = TestDb.New();
+		var svc = Build(db);
+		var p = await svc.CreateProjectAsync(new CreateProjectDto { Title = "A" });
+
+		await svc.UpdateProjectPositionAsync(p.Id, new UpdatePositionDto { X = 123, Y = 456 });
+
+		var box = (await svc.GetBoardAsync()).Projects.Single(x => x.Id == p.Id);
+		box.PositionX.Should().Be(123);
+		box.PositionY.Should().Be(456);
 	}
 }
