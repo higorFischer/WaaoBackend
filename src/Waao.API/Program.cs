@@ -90,6 +90,7 @@ builder.Services.AddScoped<ICareerEventService, CareerEventService>();
 builder.Services.AddScoped<IGamificationService, GamificationService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IKanbanService, Waao.Services.Services.Kanban.KanbanService>();
+builder.Services.AddScoped<IAllocationService, Waao.Services.Services.Allocation.AllocationService>();
 builder.Services.AddScoped<IOnboardingService, OnboardingService>();
 builder.Services.AddScoped<ICourseService, CourseService>();
 builder.Services.AddScoped<ICourseCompletionService, CourseCompletionService>();
