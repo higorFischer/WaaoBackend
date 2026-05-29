@@ -88,13 +88,15 @@ public class AllocationsController(IAllocationService Service) : ControllerBase
 		return NoContent();
 	}
 
-	// ----- Allocations (any collaborator) -----
+	// ----- Allocations (admin only — everyone else is read-only) -----
 	[HttpPost]
+	[Authorize(Policy = "Admin")]
 	[ProducesResponseType(typeof(AllocationDto), StatusCodes.Status201Created)]
 	public async Task<IActionResult> Allocate([FromBody] CreateAllocationDto dto, CancellationToken ct)
 		=> Created(string.Empty, await Service.AllocateAsync(dto, Me, ct));
 
 	[HttpPost("bulk")]
+	[Authorize(Policy = "Admin")]
 	[ProducesResponseType(StatusCodes.Status204NoContent)]
 	public async Task<IActionResult> BulkAllocate([FromBody] BulkAllocateDto dto, CancellationToken ct)
 	{
@@ -103,16 +105,19 @@ public class AllocationsController(IAllocationService Service) : ControllerBase
 	}
 
 	[HttpPut("{id:guid}/move")]
+	[Authorize(Policy = "Admin")]
 	[ProducesResponseType(typeof(AllocationDto), StatusCodes.Status200OK)]
 	public async Task<IActionResult> Move(Guid id, [FromBody] MoveAllocationDto dto, CancellationToken ct)
 		=> Ok(await Service.MoveAllocationAsync(id, dto, ct));
 
 	[HttpPut("{id:guid}/note")]
+	[Authorize(Policy = "Admin")]
 	[ProducesResponseType(typeof(AllocationDto), StatusCodes.Status200OK)]
 	public async Task<IActionResult> UpdateNote(Guid id, [FromBody] UpdateNoteDto dto, CancellationToken ct)
 		=> Ok(await Service.UpdateNoteAsync(id, dto, ct));
 
 	[HttpDelete("{id:guid}")]
+	[Authorize(Policy = "Admin")]
 	[ProducesResponseType(StatusCodes.Status204NoContent)]
 	public async Task<IActionResult> Remove(Guid id, CancellationToken ct)
 	{
