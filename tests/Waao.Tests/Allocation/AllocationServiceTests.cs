@@ -14,7 +14,8 @@ public class AllocationServiceTests
 	private static AllocationService Build(Waao.Infra.EF.WaaoDbContext db) =>
 		new(db, new CreateProjectValidator(), new UpdateProjectValidator(),
 			new CreateAllocationValidator(), new UpdateNoteValidator(),
-			new CreateConnectionValidator(), new UpdatePositionValidator());
+			new CreateConnectionValidator(), new UpdatePositionValidator(),
+			new SetParentValidator());
 
 	private static async Task<Guid> SeedCollaborator(Waao.Infra.EF.WaaoDbContext db, string name)
 	{
@@ -189,5 +190,61 @@ public class AllocationServiceTests
 		var box = (await svc.GetBoardAsync()).Projects.Single(x => x.Id == p.Id);
 		box.PositionX.Should().Be(123);
 		box.PositionY.Should().Be(456);
+	}
+
+	[Fact]
+	public async Task SetParent_NestsProject_BoardReflectsParent()
+	{
+		var db = TestDb.New();
+		var svc = Build(db);
+		var parent = await svc.CreateProjectAsync(new CreateProjectDto { Title = "Platform" });
+		var child = await svc.CreateProjectAsync(new CreateProjectDto { Title = "Billing" });
+
+		await svc.SetProjectParentAsync(child.Id, new SetParentDto { ParentProjectId = parent.Id, X = 20, Y = 60 });
+
+		var box = (await svc.GetBoardAsync()).Projects.Single(p => p.Id == child.Id);
+		box.ParentProjectId.Should().Be(parent.Id);
+		box.PositionX.Should().Be(20);
+	}
+
+	[Fact]
+	public async Task SetParent_Unnest_ClearsParent()
+	{
+		var db = TestDb.New();
+		var svc = Build(db);
+		var parent = await svc.CreateProjectAsync(new CreateProjectDto { Title = "Platform" });
+		var child = await svc.CreateProjectAsync(new CreateProjectDto { Title = "Billing" });
+		await svc.SetProjectParentAsync(child.Id, new SetParentDto { ParentProjectId = parent.Id, X = 10, Y = 10 });
+
+		await svc.SetProjectParentAsync(child.Id, new SetParentDto { ParentProjectId = null, X = 300, Y = 120 });
+
+		var box = (await svc.GetBoardAsync()).Projects.Single(p => p.Id == child.Id);
+		box.ParentProjectId.Should().BeNull();
+		box.PositionX.Should().Be(300);
+	}
+
+	[Fact]
+	public async Task SetParent_SelfParent_Throws()
+	{
+		var db = TestDb.New();
+		var svc = Build(db);
+		var p = await svc.CreateProjectAsync(new CreateProjectDto { Title = "A" });
+
+		var act = () => svc.SetProjectParentAsync(p.Id, new SetParentDto { ParentProjectId = p.Id, X = 0, Y = 0 });
+		await act.Should().ThrowAsync<InvalidOperationException>();
+	}
+
+	[Fact]
+	public async Task SetParent_Cycle_Throws()
+	{
+		var db = TestDb.New();
+		var svc = Build(db);
+		var a = await svc.CreateProjectAsync(new CreateProjectDto { Title = "A" });
+		var b = await svc.CreateProjectAsync(new CreateProjectDto { Title = "B" });
+		await svc.SetProjectParentAsync(b.Id, new SetParentDto { ParentProjectId = a.Id, X = 0, Y = 0 }); // B under A
+
+		// Now try to put A under B → cycle
+		var act = () => svc.SetProjectParentAsync(a.Id, new SetParentDto { ParentProjectId = b.Id, X = 0, Y = 0 });
+		await act.Should().ThrowAsync<InvalidOperationException>();
 	}
 }

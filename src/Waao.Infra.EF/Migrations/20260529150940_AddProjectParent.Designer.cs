@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Waao.Infra.EF;
@@ -11,9 +12,11 @@ using Waao.Infra.EF;
 namespace Waao.Infra.EF.Migrations
 {
     [DbContext(typeof(WaaoDbContext))]
-    partial class WaaoDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260529150940_AddProjectParent")]
+    partial class AddProjectParent
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

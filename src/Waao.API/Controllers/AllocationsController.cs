@@ -64,6 +64,15 @@ public class AllocationsController(IAllocationService Service) : ControllerBase
 		return NoContent();
 	}
 
+	[HttpPut("projects/{id:guid}/parent")]
+	[Authorize(Policy = "Admin")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	public async Task<IActionResult> SetParent(Guid id, [FromBody] SetParentDto dto, CancellationToken ct)
+	{
+		await Service.SetProjectParentAsync(id, dto, ct);
+		return NoContent();
+	}
+
 	[HttpPost("connections")]
 	[Authorize(Policy = "Admin")]
 	[ProducesResponseType(typeof(ProjectConnectionDto), StatusCodes.Status201Created)]

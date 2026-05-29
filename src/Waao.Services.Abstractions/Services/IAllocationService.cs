@@ -18,6 +18,7 @@ public interface IAllocationService
 	Task RemoveAllocationAsync(Guid allocationId, CancellationToken ct = default);
 
 	Task UpdateProjectPositionAsync(Guid projectId, UpdatePositionDto dto, CancellationToken ct = default);
+	Task SetProjectParentAsync(Guid projectId, SetParentDto dto, CancellationToken ct = default);
 	Task<ProjectConnectionDto> CreateConnectionAsync(CreateConnectionDto dto, CancellationToken ct = default);
 	Task RemoveConnectionAsync(Guid connectionId, CancellationToken ct = default);
 }

@@ -16,7 +16,8 @@ public sealed class AllocationService(
 	IValidator<CreateAllocationDto> CreateAllocationValidator,
 	IValidator<UpdateNoteDto> UpdateNoteValidator,
 	IValidator<CreateConnectionDto> CreateConnectionValidator,
-	IValidator<UpdatePositionDto> UpdatePositionValidator) : IAllocationService
+	IValidator<UpdatePositionDto> UpdatePositionValidator,
+	IValidator<SetParentDto> SetParentValidator) : IAllocationService
 {
 	public async Task<AllocationBoardDto> GetBoardAsync(CancellationToken ct = default)
 	{
@@ -231,6 +232,42 @@ public sealed class AllocationService(
 		await UpdatePositionValidator.ValidateAndThrowAsync(dto, ct);
 		var project = await Db.Projects.FirstOrDefaultAsync(p => p.Id == projectId, ct)
 			?? throw new KeyNotFoundException($"Project {projectId} not found.");
+		project.PositionX = dto.X;
+		project.PositionY = dto.Y;
+		project.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+	}
+
+	public async Task SetProjectParentAsync(Guid projectId, SetParentDto dto, CancellationToken ct = default)
+	{
+		await SetParentValidator.ValidateAndThrowAsync(dto, ct);
+
+		var project = await Db.Projects.FirstOrDefaultAsync(p => p.Id == projectId, ct)
+			?? throw new KeyNotFoundException($"Project {projectId} not found.");
+
+		if (dto.ParentProjectId is { } parentId)
+		{
+			if (parentId == projectId)
+				throw new InvalidOperationException("A project cannot be its own parent.");
+
+			var parent = await Db.Projects.FirstOrDefaultAsync(p => p.Id == parentId, ct)
+				?? throw new KeyNotFoundException($"Project {parentId} not found.");
+			if (parent.IsArchived)
+				throw new InvalidOperationException("Cannot nest under an archived project.");
+
+			// Cycle guard: walk up from the proposed parent; if we reach projectId, it's a cycle.
+			var chain = await Db.Projects.Select(p => new { p.Id, p.ParentProjectId }).ToListAsync(ct);
+			var map = chain.ToDictionary(x => x.Id, x => x.ParentProjectId);
+			var cursor = (Guid?)parentId;
+			while (cursor is { } c)
+			{
+				if (c == projectId)
+					throw new InvalidOperationException("Nesting would create a cycle.");
+				cursor = map.TryGetValue(c, out var next) ? next : null;
+			}
+		}
+
+		project.ParentProjectId = dto.ParentProjectId;
 		project.PositionX = dto.X;
 		project.PositionY = dto.Y;
 		project.UpdatedAt = DateTime.UtcNow;

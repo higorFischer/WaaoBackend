@@ -34,6 +34,7 @@ public static class AllocationMapper
 		Position = p.Position,
 		PositionX = p.PositionX,
 		PositionY = p.PositionY,
+		ParentProjectId = p.ParentProjectId,
 		Allocations = p.Allocations
 			.OrderBy(a => a.Position)
 			.Select(ToDto)

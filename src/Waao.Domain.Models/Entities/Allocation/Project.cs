@@ -11,6 +11,10 @@ public class Project : Entity
 	public double PositionX { get; set; }
 	public double PositionY { get; set; }
 
+	public Guid? ParentProjectId { get; set; }
+	public virtual Project? Parent { get; set; }
+	public virtual ICollection<Project> Children { get; set; } = [];
+
 	public virtual ICollection<ProjectAllocation> Allocations { get; set; } = [];
 	public virtual ICollection<ProjectConnection> OutgoingConnections { get; set; } = [];
 }

@@ -28,6 +28,7 @@ public record ProjectWithAllocationsDto
 	public int Position { get; init; }
 	public double PositionX { get; init; }
 	public double PositionY { get; init; }
+	public Guid? ParentProjectId { get; init; }
 	public IReadOnlyList<AllocationDto> Allocations { get; init; } = [];
 }
 
@@ -94,4 +95,11 @@ public record MoveAllocationDto
 public record UpdateNoteDto
 {
 	public string? Note { get; init; }
+}
+
+public record SetParentDto
+{
+	public Guid? ParentProjectId { get; init; }
+	public double X { get; init; }
+	public double Y { get; init; }
 }

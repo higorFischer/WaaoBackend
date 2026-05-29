@@ -60,3 +60,12 @@ public class UpdatePositionValidator : AbstractValidator<UpdatePositionDto>
 		RuleFor(x => x.Y).Must(double.IsFinite).WithMessage("Y must be finite.");
 	}
 }
+
+public class SetParentValidator : AbstractValidator<SetParentDto>
+{
+	public SetParentValidator()
+	{
+		RuleFor(x => x.X).Must(double.IsFinite).WithMessage("X must be finite.");
+		RuleFor(x => x.Y).Must(double.IsFinite).WithMessage("Y must be finite.");
+	}
+}

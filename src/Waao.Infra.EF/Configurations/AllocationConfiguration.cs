@@ -16,6 +16,13 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
 
 		builder.HasIndex(x => new { x.IsArchived, x.IsDeleted });
 
+		builder.HasOne(x => x.Parent)
+			.WithMany(p => p.Children)
+			.HasForeignKey(x => x.ParentProjectId)
+			.OnDelete(DeleteBehavior.Restrict);
+
+		builder.HasIndex(x => x.ParentProjectId);
+
 		builder.HasQueryFilter(x => !x.IsDeleted);
 	}
 }
