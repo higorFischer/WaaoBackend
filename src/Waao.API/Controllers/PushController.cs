@@ -34,4 +34,18 @@ public class PushController(IPushNotificationService Service) : ControllerBase
 		await Service.RemoveSubscriptionAsync(dto.Endpoint, ct);
 		return NoContent();
 	}
+
+	/// <summary>Send a test push to the caller's own devices — lets a user verify push works.</summary>
+	[HttpPost("test")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	public async Task<IActionResult> Test([FromBody] PushTestDto? dto, CancellationToken ct)
+	{
+		await Service.SendToCollaboratorAsync(
+			Me,
+			string.IsNullOrWhiteSpace(dto?.Title) ? "WAAO" : dto!.Title,
+			string.IsNullOrWhiteSpace(dto?.Body) ? "Test notification — push is working 🎉" : dto!.Body,
+			"/",
+			ct);
+		return NoContent();
+	}
 }

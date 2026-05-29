@@ -11,3 +11,9 @@ public record UnsubscribeDto
 {
 	public string Endpoint { get; init; } = string.Empty;
 }
+
+public record PushTestDto
+{
+	public string? Title { get; init; }
+	public string? Body { get; init; }
+}
