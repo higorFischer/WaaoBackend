@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Waao.Domain.Models.Entities.Messaging;
 using Waao.Domain.Models.Enums;
 using Waao.Infra.EF;
@@ -11,7 +12,9 @@ namespace Waao.Services.Services;
 
 public sealed class MessageService(
 	WaaoDbContext Db,
-	INotificationService NotificationService) : IMessageService
+	INotificationService NotificationService,
+	IPushNotificationService Push,
+	ILogger<MessageService> Logger) : IMessageService
 {
 	// =====================================================================
 	// GET MESSAGES (with before-cursor pagination)
@@ -221,6 +224,32 @@ public sealed class MessageService(
 				ct);
 		}
 
+		// WhatsApp-style OS push to the other channel members (excludes the author and anyone
+		// already @mentioned — they got the mention push). No bell-Notification entry, just push.
+		try
+		{
+			var pushRecipients = await Db.ChannelMembers
+				.Where(m => m.ChannelId == channelId && m.CollaboratorId != authorId && !mentionedIds.Contains(m.CollaboratorId))
+				.Select(m => m.CollaboratorId)
+				.ToListAsync(ct);
+
+			if (pushRecipients.Count > 0)
+			{
+				var channel = await Db.Channels.AsNoTracking().FirstOrDefaultAsync(c => c.Id == channelId, ct);
+				var isDm = channel?.Kind == ChannelKind.DirectMessage;
+				var preview = BuildPushPreview(dto.Body, hasAttachments);
+				var title = isDm ? author.FullName : channel?.Name ?? "WAAO";
+				var pushBody = isDm ? preview : $"{author.FullName}: {preview}";
+				var url = $"/messages?channel={channelId}";
+				foreach (var recipientId in pushRecipients)
+					await Push.SendToCollaboratorAsync(recipientId, title, pushBody, url, ct);
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.LogWarning(ex, "Failed to send message push for channel {Channel}.", channelId);
+		}
+
 		return new MessageDto
 		{
 			Id = message.Id,
@@ -287,6 +316,14 @@ public sealed class MessageService(
 	// =====================================================================
 	// HELPERS
 	// =====================================================================
+
+	private static string BuildPushPreview(string? body, bool hasAttachments)
+	{
+		var plain = MentionParser.ToPlainText(body ?? string.Empty).Trim();
+		if (string.IsNullOrEmpty(plain))
+			return hasAttachments ? "📎" : "";
+		return plain.Length > 120 ? plain[..120] + "…" : plain;
+	}
 
 	private static MessageDto MapToDto(Message m, List<MessageMention>? mentions) => new()
 	{

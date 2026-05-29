@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using Waao.Domain.Models.Entities;
 using Waao.Domain.Models.Entities.Messaging;
@@ -17,7 +18,7 @@ public class MessageServiceTests
 	{
 		var db = TestDb.New();
 		var chSvc = new ChannelService(db, NullNotificationService.Instance);
-		var msgSvc = new MessageService(db, NullNotificationService.Instance);
+		var msgSvc = new MessageService(db, NullNotificationService.Instance, NullPushNotificationService.Instance, NullLogger<MessageService>.Instance);
 		return (msgSvc, chSvc, db);
 	}
 
