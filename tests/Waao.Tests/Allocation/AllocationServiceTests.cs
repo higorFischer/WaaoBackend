@@ -265,4 +265,72 @@ public class AllocationServiceTests
 		board.Projects.Should().NotContain(p => p.Id == parent.Id); // archived, hidden
 		board.Projects.Single(p => p.Id == child.Id).ParentProjectId.Should().Be(grand.Id); // re-homed
 	}
+
+	[Fact]
+	public async Task Allocate_RecordsAssignedEvent()
+	{
+		var db = TestDb.New();
+		var svc = Build(db);
+		var who = await SeedCollaborator(db, "Eva");
+		var p = await svc.CreateProjectAsync(new CreateProjectDto { Title = "P" });
+
+		await svc.AllocateAsync(new CreateAllocationDto { ProjectId = p.Id, CollaboratorId = who }, who);
+
+		var hist = await svc.GetCollaboratorHistoryAsync(who);
+		hist.Events.Should().ContainSingle(e => e.EventType == "Assigned" && e.ProjectId == p.Id);
+		hist.Summary.Should().ContainSingle(s => s.ProjectId == p.Id && s.Active);
+	}
+
+	[Fact]
+	public async Task Move_RecordsUnassignedAndAssigned()
+	{
+		var db = TestDb.New();
+		var svc = Build(db);
+		var who = await SeedCollaborator(db, "Fred");
+		var p1 = await svc.CreateProjectAsync(new CreateProjectDto { Title = "P1" });
+		var p2 = await svc.CreateProjectAsync(new CreateProjectDto { Title = "P2" });
+		var a = await svc.AllocateAsync(new CreateAllocationDto { ProjectId = p1.Id, CollaboratorId = who }, who);
+
+		await svc.MoveAllocationAsync(a.Id, new MoveAllocationDto { ProjectId = p2.Id, Position = 0 });
+
+		var hist = await svc.GetCollaboratorHistoryAsync(who);
+		hist.Events.Should().Contain(e => e.EventType == "Unassigned" && e.ProjectId == p1.Id);
+		hist.Events.Should().Contain(e => e.EventType == "Assigned" && e.ProjectId == p2.Id);
+	}
+
+	[Fact]
+	public async Task Remove_RecordsUnassignedEvent_AndStintNotActive()
+	{
+		var db = TestDb.New();
+		var svc = Build(db);
+		var who = await SeedCollaborator(db, "Gina");
+		var p = await svc.CreateProjectAsync(new CreateProjectDto { Title = "P" });
+		var a = await svc.AllocateAsync(new CreateAllocationDto { ProjectId = p.Id, CollaboratorId = who }, who);
+
+		await svc.RemoveAllocationAsync(a.Id);
+
+		var hist = await svc.GetCollaboratorHistoryAsync(who);
+		hist.Events.Count(e => e.ProjectId == p.Id).Should().Be(2); // Assigned + Unassigned
+		hist.Summary.Single(s => s.ProjectId == p.Id).Active.Should().BeFalse();
+	}
+
+	[Fact]
+	public async Task ProjectHistory_CountsUsersAndStints()
+	{
+		var db = TestDb.New();
+		var svc = Build(db);
+		var one = await SeedCollaborator(db, "Hank");
+		var two = await SeedCollaborator(db, "Ivy");
+		var p = await svc.CreateProjectAsync(new CreateProjectDto { Title = "P" });
+		await svc.AllocateAsync(new CreateAllocationDto { ProjectId = p.Id, CollaboratorId = one }, one);
+		var aTwo = await svc.AllocateAsync(new CreateAllocationDto { ProjectId = p.Id, CollaboratorId = two }, two);
+
+		await svc.RemoveAllocationAsync(aTwo.Id);
+
+		var hist = await svc.GetProjectHistoryAsync(p.Id);
+		hist.TotalUsers.Should().Be(2);
+		hist.ActiveUsers.Should().Be(1);
+		hist.Members.Single(m => m.CollaboratorId == two).Active.Should().BeFalse();
+		hist.Members.Single(m => m.CollaboratorId == one).Active.Should().BeTrue();
+	}
 }

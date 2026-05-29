@@ -69,6 +69,7 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 	public DbSet<Project> Projects => Set<Project>();
 	public DbSet<ProjectAllocation> ProjectAllocations => Set<ProjectAllocation>();
 	public DbSet<Waao.Domain.Models.Entities.Allocation.ProjectConnection> ProjectConnections => Set<Waao.Domain.Models.Entities.Allocation.ProjectConnection>();
+	public DbSet<Waao.Domain.Models.Entities.Allocation.ProjectAllocationEvent> ProjectAllocationEvents => Set<Waao.Domain.Models.Entities.Allocation.ProjectAllocationEvent>();
 
 	// Feature requests
 	public DbSet<FeatureRequest> FeatureRequests => Set<FeatureRequest>();

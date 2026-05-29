@@ -2,6 +2,7 @@ using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Waao.Domain.Models.Entities;
 using Waao.Domain.Models.Entities.Allocation;
+using Waao.Domain.Models.Enums;
 using Waao.Infra.EF;
 using Waao.Services.Abstractions.Dtos.Allocation;
 using Waao.Services.Abstractions.Services;
@@ -167,6 +168,7 @@ public sealed class AllocationService(
 			AllocatedById = currentCollaboratorId,
 		};
 		Db.ProjectAllocations.Add(alloc);
+		RecordEvent(dto.CollaboratorId, project, AllocationEventType.Assigned, currentCollaboratorId);
 		await Db.SaveChangesAsync(ct);
 
 		await Db.Entry(alloc).Reference(a => a.Collaborator).LoadAsync(ct);
@@ -182,6 +184,8 @@ public sealed class AllocationService(
 			.Include(a => a.Collaborator).ThenInclude(c => c.Department)
 			.FirstOrDefaultAsync(a => a.Id == allocationId, ct)
 			?? throw new KeyNotFoundException($"Allocation {allocationId} not found.");
+
+		var sourceProject = await Db.Projects.FirstOrDefaultAsync(p => p.Id == alloc.ProjectId, ct);
 
 		var target = await Db.Projects.FirstOrDefaultAsync(p => p.Id == dto.ProjectId, ct)
 			?? throw new KeyNotFoundException($"Project {dto.ProjectId} not found.");
@@ -202,9 +206,17 @@ public sealed class AllocationService(
 				alloc.DeletedAt = DateTime.UtcNow;
 				clash.Position = dto.Position;
 				clash.UpdatedAt = DateTime.UtcNow;
+				if (sourceProject != null)
+					RecordEvent(alloc.CollaboratorId, sourceProject, AllocationEventType.Unassigned, null);
 				await Db.SaveChangesAsync(ct);
 				return AllocationMapper.ToDto(clash);
 			}
+		}
+
+		if (dto.ProjectId != alloc.ProjectId && sourceProject != null)
+		{
+			RecordEvent(alloc.CollaboratorId, sourceProject, AllocationEventType.Unassigned, null);
+			RecordEvent(alloc.CollaboratorId, target, AllocationEventType.Assigned, null);
 		}
 
 		alloc.ProjectId = dto.ProjectId;
@@ -232,6 +244,9 @@ public sealed class AllocationService(
 	{
 		var alloc = await Db.ProjectAllocations.FirstOrDefaultAsync(a => a.Id == allocationId, ct)
 			?? throw new KeyNotFoundException($"Allocation {allocationId} not found.");
+		var project = await Db.Projects.FirstOrDefaultAsync(p => p.Id == alloc.ProjectId, ct);
+		if (project != null)
+			RecordEvent(alloc.CollaboratorId, project, AllocationEventType.Unassigned, null);
 		alloc.IsDeleted = true;
 		alloc.DeletedAt = DateTime.UtcNow;
 		await Db.SaveChangesAsync(ct);
@@ -324,5 +339,162 @@ public sealed class AllocationService(
 		conn.IsDeleted = true;
 		conn.DeletedAt = DateTime.UtcNow;
 		await Db.SaveChangesAsync(ct);
+	}
+
+	private void RecordEvent(Guid collaboratorId, Project project, AllocationEventType type, Guid? actorId)
+		=> Db.ProjectAllocationEvents.Add(new ProjectAllocationEvent
+		{
+			Id = Guid.CreateVersion7(),
+			CollaboratorId = collaboratorId,
+			ProjectId = project.Id,
+			ProjectTitle = project.Title,
+			EventType = type,
+			OccurredAt = DateTime.UtcNow,
+			ActorId = actorId,
+		});
+
+	public async Task<CollaboratorAllocationHistoryDto> GetCollaboratorHistoryAsync(Guid collaboratorId, CancellationToken ct = default)
+	{
+		var collaborator = await Db.Collaborators.FirstOrDefaultAsync(c => c.Id == collaboratorId, ct)
+			?? throw new KeyNotFoundException($"Collaborator {collaboratorId} not found.");
+
+		var events = await Db.ProjectAllocationEvents
+			.AsNoTracking()
+			.Where(e => e.CollaboratorId == collaboratorId)
+			.OrderBy(e => e.OccurredAt)
+			.ToListAsync(ct);
+
+		var actorIds = events.Where(e => e.ActorId.HasValue).Select(e => e.ActorId!.Value).Distinct().ToList();
+		var actors = await Db.Collaborators.AsNoTracking()
+			.Where(c => actorIds.Contains(c.Id))
+			.ToDictionaryAsync(c => c.Id, c => c.FullName, ct);
+
+		// Derive per-project durations: walk events chronologically; Assigned opens a stint,
+		// Unassigned closes the most recent open one. Open stint at the end = active (to now).
+		var now = DateTime.UtcNow;
+		var summary = events
+			.GroupBy(e => new { e.ProjectId, e.ProjectTitle })
+			.Select(g =>
+			{
+				long minutes = 0;
+				int stints = 0;
+				DateTime? openedAt = null;
+				foreach (var e in g.OrderBy(x => x.OccurredAt))
+				{
+					if (e.EventType == AllocationEventType.Assigned)
+					{
+						openedAt ??= e.OccurredAt;
+					}
+					else if (e.EventType == AllocationEventType.Unassigned && openedAt is { } start)
+					{
+						minutes += (long)(e.OccurredAt - start).TotalMinutes;
+						stints++;
+						openedAt = null;
+					}
+				}
+				var active = openedAt is { };
+				if (openedAt is { } o2)
+				{
+					minutes += (long)(now - o2).TotalMinutes;
+					stints++;
+				}
+				return new ProjectTimeSummaryDto
+				{
+					ProjectId = g.Key.ProjectId,
+					ProjectTitle = g.Key.ProjectTitle,
+					TotalMinutes = minutes,
+					StintCount = stints,
+					Active = active,
+				};
+			})
+			.OrderByDescending(s => s.Active).ThenByDescending(s => s.TotalMinutes)
+			.ToList();
+
+		return new CollaboratorAllocationHistoryDto
+		{
+			CollaboratorId = collaboratorId,
+			FullName = collaborator.FullName,
+			Summary = summary,
+			Events = events.OrderByDescending(e => e.OccurredAt)
+				.Select(e => AllocationMapper.ToDto(e, e.ActorId.HasValue && actors.TryGetValue(e.ActorId.Value, out var n) ? n : null))
+				.ToList(),
+		};
+	}
+
+	public async Task<ProjectHistoryDto> GetProjectHistoryAsync(Guid projectId, CancellationToken ct = default)
+	{
+		var events = await Db.ProjectAllocationEvents
+			.AsNoTracking()
+			.Where(e => e.ProjectId == projectId)
+			.OrderBy(e => e.OccurredAt)
+			.ToListAsync(ct);
+
+		var project = await Db.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.Id == projectId, ct);
+		var projectTitle = project?.Title
+			?? events.OrderByDescending(e => e.OccurredAt).Select(e => e.ProjectTitle).FirstOrDefault()
+			?? string.Empty;
+
+		var collaboratorIds = events.Select(e => e.CollaboratorId).Distinct().ToList();
+		var names = await Db.Collaborators.AsNoTracking()
+			.Where(c => collaboratorIds.Contains(c.Id))
+			.ToDictionaryAsync(c => c.Id, c => c.FullName, ct);
+
+		var actorIds = events.Where(e => e.ActorId.HasValue).Select(e => e.ActorId!.Value).Distinct().ToList();
+		var actors = await Db.Collaborators.AsNoTracking()
+			.Where(c => actorIds.Contains(c.Id))
+			.ToDictionaryAsync(c => c.Id, c => c.FullName, ct);
+
+		// Derive per-collaborator durations: walk events chronologically; Assigned opens a stint,
+		// Unassigned closes the most recent open one. Open stint at the end = active (to now).
+		var now = DateTime.UtcNow;
+		var members = events
+			.GroupBy(e => e.CollaboratorId)
+			.Select(g =>
+			{
+				long minutes = 0;
+				int stints = 0;
+				DateTime? openedAt = null;
+				foreach (var e in g.OrderBy(x => x.OccurredAt))
+				{
+					if (e.EventType == AllocationEventType.Assigned)
+					{
+						openedAt ??= e.OccurredAt;
+					}
+					else if (e.EventType == AllocationEventType.Unassigned && openedAt is { } start)
+					{
+						minutes += (long)(e.OccurredAt - start).TotalMinutes;
+						stints++;
+						openedAt = null;
+					}
+				}
+				var active = openedAt is { };
+				if (openedAt is { } o2)
+				{
+					minutes += (long)(now - o2).TotalMinutes;
+					stints++;
+				}
+				return new CollaboratorProjectTimeDto
+				{
+					CollaboratorId = g.Key,
+					FullName = names.TryGetValue(g.Key, out var name) ? name : string.Empty,
+					TotalMinutes = minutes,
+					StintCount = stints,
+					Active = active,
+				};
+			})
+			.OrderByDescending(m => m.Active).ThenByDescending(m => m.TotalMinutes)
+			.ToList();
+
+		return new ProjectHistoryDto
+		{
+			ProjectId = projectId,
+			ProjectTitle = projectTitle,
+			TotalUsers = members.Count,
+			ActiveUsers = members.Count(m => m.Active),
+			Members = members,
+			Events = events.OrderByDescending(e => e.OccurredAt)
+				.Select(e => AllocationMapper.ToDto(e, e.ActorId.HasValue && actors.TryGetValue(e.ActorId.Value, out var n) ? n : null))
+				.ToList(),
+		};
 	}
 }

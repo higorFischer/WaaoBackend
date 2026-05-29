@@ -103,3 +103,49 @@ public record SetParentDto
 	public double X { get; init; }
 	public double Y { get; init; }
 }
+
+public record AllocationEventDto
+{
+	public Guid Id { get; init; }
+	public Guid ProjectId { get; init; }
+	public string ProjectTitle { get; init; } = string.Empty;
+	public string EventType { get; init; } = string.Empty;
+	public DateTime OccurredAt { get; init; }
+	public string? ActorName { get; init; }
+}
+
+public record ProjectTimeSummaryDto
+{
+	public Guid ProjectId { get; init; }
+	public string ProjectTitle { get; init; } = string.Empty;
+	public long TotalMinutes { get; init; }
+	public int StintCount { get; init; }
+	public bool Active { get; init; }
+}
+
+public record CollaboratorAllocationHistoryDto
+{
+	public Guid CollaboratorId { get; init; }
+	public string FullName { get; init; } = string.Empty;
+	public IReadOnlyList<ProjectTimeSummaryDto> Summary { get; init; } = [];
+	public IReadOnlyList<AllocationEventDto> Events { get; init; } = [];
+}
+
+public record CollaboratorProjectTimeDto
+{
+	public Guid CollaboratorId { get; init; }
+	public string FullName { get; init; } = string.Empty;
+	public long TotalMinutes { get; init; }
+	public int StintCount { get; init; }
+	public bool Active { get; init; }
+}
+
+public record ProjectHistoryDto
+{
+	public Guid ProjectId { get; init; }
+	public string ProjectTitle { get; init; } = string.Empty;
+	public int TotalUsers { get; init; }
+	public int ActiveUsers { get; init; }
+	public IReadOnlyList<CollaboratorProjectTimeDto> Members { get; init; } = [];
+	public IReadOnlyList<AllocationEventDto> Events { get; init; } = [];
+}

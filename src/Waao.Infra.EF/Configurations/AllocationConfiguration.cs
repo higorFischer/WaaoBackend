@@ -79,3 +79,16 @@ public class ProjectConnectionConfiguration : IEntityTypeConfiguration<ProjectCo
 		builder.HasQueryFilter(x => !x.IsDeleted);
 	}
 }
+
+public class ProjectAllocationEventConfiguration : IEntityTypeConfiguration<ProjectAllocationEvent>
+{
+	public void Configure(EntityTypeBuilder<ProjectAllocationEvent> builder)
+	{
+		builder.HasKey(x => x.Id);
+		builder.Property(x => x.ProjectTitle).IsRequired().HasMaxLength(120);
+		builder.Property(x => x.EventType).HasConversion<string>().HasMaxLength(20);
+		builder.HasIndex(x => new { x.CollaboratorId, x.OccurredAt });
+		builder.HasIndex(x => new { x.ProjectId, x.OccurredAt });
+		builder.HasQueryFilter(x => !x.IsDeleted);
+	}
+}

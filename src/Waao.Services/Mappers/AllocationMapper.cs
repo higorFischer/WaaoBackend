@@ -48,4 +48,14 @@ public static class AllocationMapper
 		TargetProjectId = c.TargetProjectId,
 		Label = c.Label,
 	};
+
+	public static AllocationEventDto ToDto(ProjectAllocationEvent e, string? actorName) => new()
+	{
+		Id = e.Id,
+		ProjectId = e.ProjectId,
+		ProjectTitle = e.ProjectTitle,
+		EventType = e.EventType.ToString(),
+		OccurredAt = e.OccurredAt,
+		ActorName = actorName,
+	};
 }

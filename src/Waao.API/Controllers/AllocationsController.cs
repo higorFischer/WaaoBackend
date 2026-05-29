@@ -111,4 +111,15 @@ public class AllocationsController(IAllocationService Service) : ControllerBase
 		await Service.RemoveAllocationAsync(id, ct);
 		return NoContent();
 	}
+
+	// ----- History (any authenticated) -----
+	[HttpGet("history/collaborator/{collaboratorId:guid}")]
+	[ProducesResponseType(typeof(CollaboratorAllocationHistoryDto), StatusCodes.Status200OK)]
+	public async Task<IActionResult> GetHistory(Guid collaboratorId, CancellationToken ct)
+		=> Ok(await Service.GetCollaboratorHistoryAsync(collaboratorId, ct));
+
+	[HttpGet("history/project/{projectId:guid}")]
+	[ProducesResponseType(typeof(ProjectHistoryDto), StatusCodes.Status200OK)]
+	public async Task<IActionResult> GetProjectHistory(Guid projectId, CancellationToken ct)
+		=> Ok(await Service.GetProjectHistoryAsync(projectId, ct));
 }

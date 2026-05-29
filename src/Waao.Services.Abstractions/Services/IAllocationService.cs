@@ -21,4 +21,7 @@ public interface IAllocationService
 	Task SetProjectParentAsync(Guid projectId, SetParentDto dto, CancellationToken ct = default);
 	Task<ProjectConnectionDto> CreateConnectionAsync(CreateConnectionDto dto, CancellationToken ct = default);
 	Task RemoveConnectionAsync(Guid connectionId, CancellationToken ct = default);
+
+	Task<CollaboratorAllocationHistoryDto> GetCollaboratorHistoryAsync(Guid collaboratorId, CancellationToken ct = default);
+	Task<ProjectHistoryDto> GetProjectHistoryAsync(Guid projectId, CancellationToken ct = default);
 }
