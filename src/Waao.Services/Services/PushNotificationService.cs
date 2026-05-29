@@ -51,6 +51,13 @@ public sealed class PushNotificationService(
 		}
 
 		await Db.SaveChangesAsync(ct);
+		Logger.LogInformation("Push subscription {Action} for collaborator {Collaborator} ({Host}).",
+			existing is null ? "created" : "updated", collaboratorId, SafeHost(dto.Endpoint));
+	}
+
+	private static string SafeHost(string endpoint)
+	{
+		try { return new Uri(endpoint).Host; } catch { return "?"; }
 	}
 
 	// =====================================================================
@@ -86,6 +93,7 @@ public sealed class PushNotificationService(
 			.Where(s => s.CollaboratorId == collaboratorId)
 			.ToListAsync(ct);
 
+		Logger.LogInformation("Web Push: sending to {Count} subscription(s) for collaborator {Collaborator}.", subscriptions.Count, collaboratorId);
 		if (subscriptions.Count == 0)
 			return;
 
@@ -99,6 +107,7 @@ public sealed class PushNotificationService(
 			{
 				var sub = new WebPush.PushSubscription(s.Endpoint, s.P256dh, s.Auth);
 				await client.SendNotificationAsync(sub, payload, vapidDetails, ct);
+				Logger.LogInformation("Web Push delivered to push service for {Host}.", SafeHost(s.Endpoint));
 			}
 			catch (WebPushException ex) when (ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Gone)
 			{
