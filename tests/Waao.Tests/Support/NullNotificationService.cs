@@ -12,6 +12,9 @@ public sealed class NullNotificationService : INotificationService
 	public Task CreateAsync(Guid recipientId, NotificationKind kind, string title, string body, string linkType, Guid linkId, Guid? actorId, CancellationToken ct = default)
 		=> Task.CompletedTask;
 
+	public Task CreateManyAsync(IReadOnlyCollection<Guid> recipientIds, NotificationKind kind, string title, string body, string linkType, Guid linkId, Guid? actorId, CancellationToken ct = default)
+		=> Task.CompletedTask;
+
 	public Task<NotificationListDto> ListAsync(Guid collaboratorId, bool unreadOnly = false, CancellationToken ct = default)
 		=> Task.FromResult(new NotificationListDto());
 
