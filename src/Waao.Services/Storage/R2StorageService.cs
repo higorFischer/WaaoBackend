@@ -11,10 +11,43 @@ public sealed class R2StorageService(
 	ILogger<R2StorageService> Logger) : IR2StorageService
 {
 	private readonly R2Options Options = OptionsAccessor.Value;
+	// Cached, reused S3 client (thread-safe). Presigning runs on every message read, so we avoid
+	// re-creating a client per call. Lazily built so a misconfigured-but-unused service never throws.
+	private AmazonS3Client? _client;
+	private readonly object _clientLock = new();
 
 	public bool IsEnabled => Options.IsConfigured;
 
+	public bool HasPrivateBucket => Options.HasPrivateBucket;
+
 	public async Task<string> UploadAsync(string key, Stream content, string contentType, CancellationToken ct = default)
+	{
+		await UploadToBucketAsync(Options.Bucket, key, content, contentType, ct);
+		return Options.PublicUrlFor(key);
+	}
+
+	public async Task<string> UploadPrivateAsync(string key, Stream content, string contentType, CancellationToken ct = default)
+	{
+		await UploadToBucketAsync(Options.PrivateBucketName, key, content, contentType, ct);
+		return key;
+	}
+
+	public string GetPresignedUrl(string key, TimeSpan ttl)
+	{
+		if (!IsEnabled)
+			throw new InvalidOperationException("R2 storage is not configured.");
+
+		var req = new GetPreSignedUrlRequest
+		{
+			BucketName = Options.PrivateBucketName,
+			Key        = key,
+			Verb       = HttpVerb.GET,
+			Expires    = DateTime.UtcNow.Add(ttl),
+		};
+		return Client().GetPreSignedURL(req);
+	}
+
+	private async Task UploadToBucketAsync(string bucket, string key, Stream content, string contentType, CancellationToken ct)
 	{
 		if (!IsEnabled)
 			throw new InvalidOperationException("R2 storage is not configured.");
@@ -37,10 +70,9 @@ public sealed class R2StorageService(
 		var semi = safeContentType?.IndexOf(';');
 		if (semi.HasValue && semi.Value > 0) safeContentType = safeContentType![..semi.Value].Trim();
 
-		using var s3 = BuildClient();
 		var req = new PutObjectRequest
 		{
-			BucketName            = Options.Bucket,
+			BucketName            = bucket,
 			Key                   = key,
 			InputStream           = buffer,
 			ContentType           = safeContentType,
@@ -49,27 +81,30 @@ public sealed class R2StorageService(
 
 		try
 		{
-			await s3.PutObjectAsync(req, ct);
+			await Client().PutObjectAsync(req, ct);
 		}
 		catch (Exception ex)
 		{
 			Logger.LogError(ex, "R2 PutObject failed bucket={Bucket} key={Key} size={Size} contentType={ContentType}",
-				Options.Bucket, key, sizeBytes, contentType);
+				bucket, key, sizeBytes, contentType);
 			throw;
 		}
 
-		Logger.LogInformation("Uploaded to R2 key={Key} size={Size} contentType={ContentType}", key, sizeBytes, contentType);
-		return Options.PublicUrlFor(key);
+		Logger.LogInformation("Uploaded to R2 bucket={Bucket} key={Key} size={Size} contentType={ContentType}", bucket, key, sizeBytes, contentType);
 	}
 
-	private AmazonS3Client BuildClient()
+	private AmazonS3Client Client()
 	{
-		var config = new AmazonS3Config
+		if (_client is not null) return _client;
+		lock (_clientLock)
 		{
-			ServiceURL           = Options.Endpoint,
-			ForcePathStyle       = true,
-			AuthenticationRegion = "auto",
-		};
-		return new AmazonS3Client(Options.AccessKey, Options.SecretKey, config);
+			_client ??= new AmazonS3Client(Options.AccessKey, Options.SecretKey, new AmazonS3Config
+			{
+				ServiceURL           = Options.Endpoint,
+				ForcePathStyle       = true,
+				AuthenticationRegion = "auto",
+			});
+		}
+		return _client;
 	}
 }

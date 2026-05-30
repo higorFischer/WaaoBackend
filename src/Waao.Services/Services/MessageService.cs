@@ -16,8 +16,18 @@ public sealed class MessageService(
 	IPushNotificationService Push,
 	IPresenceTracker Presence,
 	ILogger<MessageService> Logger,
-	IMessageTextProtector Protector) : IMessageService
+	IMessageTextProtector Protector,
+	IR2StorageService Storage) : IMessageService
 {
+	/// <summary>Validity window for presigned (private) attachment URLs. Re-signed on every read,
+	/// so this only needs to outlast a single open chat session.</summary>
+	private static readonly TimeSpan AttachmentUrlTtl = TimeSpan.FromHours(12);
+
+	/// <summary>Resolves the URL the client should use for an attachment: a fresh presigned URL for
+	/// private objects (StorageKey set), or the stored public URL for legacy ones.</summary>
+	private string ResolveAttachmentUrl(MessageAttachment a)
+		=> a.StorageKey is { Length: > 0 } key ? Storage.GetPresignedUrl(key, AttachmentUrlTtl) : a.Url;
+
 	// =====================================================================
 	// GET MESSAGES (with before-cursor pagination)
 	// =====================================================================
@@ -150,7 +160,9 @@ public sealed class MessageService(
 					Id = Guid.CreateVersion7(),
 					MessageId = message.Id,
 					Kind = a.Kind,
-					Url = a.Url,
+					// Private objects store the key (URL is re-signed on read); legacy/public store the URL.
+					Url = a.StorageKey is { Length: > 0 } ? string.Empty : a.Url,
+					StorageKey = a.StorageKey,
 					Mime = a.Mime,
 					OriginalName = a.OriginalName ?? string.Empty,
 					SizeBytes = a.SizeBytes,
@@ -160,7 +172,7 @@ public sealed class MessageService(
 				Db.MessageAttachments.Add(att);
 				attachmentDtos.Add(new MessageAttachmentDto
 				{
-					Id = att.Id, Kind = att.Kind, Url = att.Url, Mime = att.Mime,
+					Id = att.Id, Kind = att.Kind, Url = ResolveAttachmentUrl(att), Mime = att.Mime,
 					OriginalName = att.OriginalName, SizeBytes = att.SizeBytes, DurationSeconds = att.DurationSeconds,
 				});
 			}
@@ -360,7 +372,7 @@ public sealed class MessageService(
 		}).ToList() ?? [],
 		Attachments = m.Attachments?.Select(a => new MessageAttachmentDto
 		{
-			Id = a.Id, Kind = a.Kind, Url = a.Url, Mime = a.Mime,
+			Id = a.Id, Kind = a.Kind, Url = ResolveAttachmentUrl(a), Mime = a.Mime,
 			OriginalName = a.OriginalName, SizeBytes = a.SizeBytes, DurationSeconds = a.DurationSeconds,
 		}).ToList() ?? [],
 	};

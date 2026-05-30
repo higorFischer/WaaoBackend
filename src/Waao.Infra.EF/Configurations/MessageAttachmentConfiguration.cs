@@ -14,6 +14,7 @@ public class MessageAttachmentConfiguration : IEntityTypeConfiguration<MessageAt
 
 		builder.Property(x => x.Kind).HasConversion<string>().IsRequired();
 		builder.Property(x => x.Url).IsRequired().HasMaxLength(2000);
+		builder.Property(x => x.StorageKey).HasMaxLength(512);
 		builder.Property(x => x.Mime).IsRequired().HasMaxLength(160);
 		builder.Property(x => x.OriginalName).IsRequired().HasMaxLength(255).HasDefaultValue(string.Empty);
 

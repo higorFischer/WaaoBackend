@@ -22,6 +22,9 @@ public class ChannelsController(
 	private Guid Me => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
 		? id : throw new UnauthorizedAccessException("Missing subject claim.");
 
+	/// <summary>Validity window for presigned attachment URLs returned on upload (re-signed on read).</summary>
+	private static readonly TimeSpan AttachmentUrlTtl = TimeSpan.FromHours(12);
+
 	[HttpGet("")]
 	[ProducesResponseType(typeof(IReadOnlyList<ChannelDto>), StatusCodes.Status200OK)]
 	public async Task<IActionResult> GetMine(CancellationToken ct)
@@ -209,9 +212,34 @@ public class ChannelsController(
 
 		try
 		{
-			using var stream = file.OpenReadStream();
-			var url = await Storage.UploadAsync(key, stream, mime, ct);
+			// Prefer the PRIVATE bucket (served via short-lived presigned URLs). If it isn't configured,
+			// or the R2 token can't reach it, fall back to the PUBLIC bucket so messaging never breaks —
+			// the fallback is logged so the misconfiguration is visible.
+			if (Storage.HasPrivateBucket)
+			{
+				try
+				{
+					using var stream = file.OpenReadStream();
+					var storageKey = await Storage.UploadPrivateAsync(key, stream, mime, ct);
+					return Ok(new UploadedAttachmentDto
+					{
+						Kind            = kind,
+						Url             = Storage.GetPresignedUrl(storageKey, AttachmentUrlTtl),
+						StorageKey      = storageKey,
+						Mime            = mime,
+						OriginalName    = file.FileName ?? safeName,
+						SizeBytes       = file.Length,
+						DurationSeconds = durationSeconds,
+					});
+				}
+				catch (Exception ex)
+				{
+					Logger.LogError(ex, "Private bucket upload failed for key={Key} — falling back to PUBLIC bucket. Grant the R2 token access to the private bucket.", key);
+				}
+			}
 
+			using var publicStream = file.OpenReadStream();
+			var url = await Storage.UploadAsync(key, publicStream, mime, ct);
 			return Ok(new UploadedAttachmentDto
 			{
 				Kind            = kind,

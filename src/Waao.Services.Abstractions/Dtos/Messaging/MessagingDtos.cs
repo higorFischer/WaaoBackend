@@ -17,7 +17,11 @@ public record MessageAttachmentDto
 public record UploadedAttachmentDto
 {
 	public MessageAttachmentKind Kind { get; init; }
+	/// <summary>Presigned (private) or public URL for immediate preview. Re-signed on read for private objects.</summary>
 	public string Url { get; init; } = string.Empty;
+	/// <summary>Private R2 object key — round-trips back on post so the server stores the key (not the
+	/// expiring URL) and re-signs on every read. Null for legacy/public uploads.</summary>
+	public string? StorageKey { get; init; }
 	public string Mime { get; init; } = string.Empty;
 	public string OriginalName { get; init; } = string.Empty;
 	public long SizeBytes { get; init; }

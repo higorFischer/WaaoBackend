@@ -8,6 +8,16 @@ public class R2Options
 	public string Bucket { get; set; } = string.Empty;
 	public string? PublicBaseUrl { get; set; }
 
+	/// <summary>Private bucket for chat attachments (no public access) — served via short-lived presigned
+	/// URLs. Falls back to <see cref="Bucket"/> when unset (no privacy gain, dev convenience).</summary>
+	public string? PrivateBucket { get; set; }
+
+	/// <summary>The bucket chat attachments are stored in/served from privately.</summary>
+	public string PrivateBucketName => string.IsNullOrWhiteSpace(PrivateBucket) ? Bucket : PrivateBucket!;
+
+	/// <summary>True when a dedicated private bucket is configured (distinct from the public one).</summary>
+	public bool HasPrivateBucket => !string.IsNullOrWhiteSpace(PrivateBucket);
+
 	public bool IsConfigured =>
 		!string.IsNullOrWhiteSpace(AccountId)
 		&& !string.IsNullOrWhiteSpace(AccessKey)
