@@ -95,6 +95,8 @@ public class BadgeConfiguration : IEntityTypeConfiguration<Badge>
 		builder.Property(x => x.Description).IsRequired().HasMaxLength(500);
 		builder.Property(x => x.Category).HasConversion<string>();
 		builder.Property(x => x.Rarity).HasConversion<string>();
+		builder.Property(x => x.IsManual).IsRequired().HasDefaultValue(false);
+		builder.Property(x => x.ColorHex).HasMaxLength(9);
 		builder.HasIndex(x => x.Code).IsUnique().HasFilter("is_deleted = false");
 		builder.HasQueryFilter(x => !x.IsDeleted);
 	}
@@ -116,7 +118,11 @@ public class CollaboratorBadgeConfiguration : IEntityTypeConfiguration<Collabora
 			.HasForeignKey(x => x.BadgeId)
 			.OnDelete(DeleteBehavior.Restrict);
 
+		builder.Property(x => x.ExpiresAt).IsRequired(false);
+		builder.Property(x => x.AwardedById).IsRequired(false);
+
 		builder.HasIndex(x => new { x.CollaboratorId, x.BadgeId }).IsUnique().HasFilter("is_deleted = false");
+		builder.HasIndex(x => x.AwardedById).HasFilter("awarded_by_id IS NOT NULL");
 		builder.HasQueryFilter(x => !x.IsDeleted);
 	}
 }

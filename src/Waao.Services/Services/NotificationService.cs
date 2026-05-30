@@ -270,6 +270,7 @@ public sealed class NotificationService(
 		"feature-request" => "/feature-requests",
 		"timeoff" => "/time-off",
 		"kudos" => "/kudos",
+		"badge" => "/profile",
 		_ => "/",
 	};
 }

@@ -10,4 +10,6 @@ public class CollaboratorBadge : Entity
 
 	public DateTime EarnedAt { get; set; } = DateTime.UtcNow;
 	public string? Context { get; set; }       // why it was awarded, e.g., "5 years at WAAO"
+	public DateTime? ExpiresAt { get; set; }   // null = permanent; set for time-bound flair
+	public Guid? AwardedById { get; set; }     // admin who manually granted; null for auto-badges
 }

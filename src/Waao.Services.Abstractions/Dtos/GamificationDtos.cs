@@ -14,6 +14,8 @@ public record BadgeDto
 	public BadgeRarity Rarity { get; init; }
 	public int XpReward { get; init; }
 	public string? UnlockRule { get; init; }
+	public bool IsManual { get; init; }
+	public string? ColorHex { get; init; }
 }
 
 public record CollaboratorBadgeDto
@@ -22,6 +24,7 @@ public record CollaboratorBadgeDto
 	public BadgeDto Badge { get; init; } = new();
 	public DateTime EarnedAt { get; init; }
 	public string? Context { get; init; }
+	public DateTime? ExpiresAt { get; init; }
 }
 
 public record LevelProgressDto
