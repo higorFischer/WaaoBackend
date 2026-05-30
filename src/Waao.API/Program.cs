@@ -218,6 +218,14 @@ using (var scope = app.Services.CreateScope())
 
 		await db.Database.MigrateAsync();
 		await DbInitializer.SeedAsync(db);
+
+		// One-time idempotent backfills (no-op once complete): encrypt any plaintext message bodies,
+		// and move legacy public chat attachments into the private bucket.
+		var startupLogger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("StartupBackfills");
+		await Waao.Services.Maintenance.StartupBackfills.EncryptLegacyMessageBodiesAsync(
+			db, scope.ServiceProvider.GetRequiredService<Waao.Services.Abstractions.Services.IMessageTextProtector>(), startupLogger);
+		await Waao.Services.Maintenance.StartupBackfills.MigrateLegacyAttachmentsToPrivateAsync(
+			db, scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Waao.Services.Storage.R2Options>>().Value, startupLogger);
 	}
 	finally
 	{
