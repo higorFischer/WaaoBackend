@@ -7,6 +7,7 @@ using Waao.Domain.Models.Entities.Kanban;
 using Waao.Domain.Models.Entities.Meetings;
 using Waao.Domain.Models.Entities.Messaging;
 using Waao.Domain.Models.Entities.Notifications;
+using Waao.Domain.Models.Entities.TimeOff;
 
 namespace Waao.Infra.EF;
 
@@ -76,6 +77,9 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 	public DbSet<FeatureRequest> FeatureRequests => Set<FeatureRequest>();
 	public DbSet<FeatureRequestVote> FeatureRequestVotes => Set<FeatureRequestVote>();
 	public DbSet<FeatureRequestComment> FeatureRequestComments => Set<FeatureRequestComment>();
+
+	// Time Off
+	public DbSet<TimeOffRequest> TimeOffRequests => Set<TimeOffRequest>();
 
 	// Internal feedback ("what's happening inside the company")
 	public DbSet<Waao.Domain.Models.Entities.Feedback.Feedback> Feedback => Set<Waao.Domain.Models.Entities.Feedback.Feedback>();

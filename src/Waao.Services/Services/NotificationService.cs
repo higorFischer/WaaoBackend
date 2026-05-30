@@ -268,6 +268,7 @@ public sealed class NotificationService(
 		"channel" => $"/messages?channel={linkId}",
 		"meeting" => $"/meetings?meeting={linkId}",
 		"feature-request" => "/feature-requests",
+		"timeoff" => "/time-off",
 		_ => "/",
 	};
 }

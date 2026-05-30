@@ -112,6 +112,9 @@ builder.Services.AddScoped<IFeatureRequestService, Waao.Services.Services.Featur
 // Internal feedback (employee → admin)
 builder.Services.AddScoped<IFeedbackService, Waao.Services.Services.FeedbackService>();
 
+// Time Off
+builder.Services.AddScoped<ITimeOffService, Waao.Services.Services.TimeOff.TimeOffService>();
+
 // R2 storage (used for chat attachments)
 builder.Services.Configure<Waao.Services.Storage.R2Options>(builder.Configuration.GetSection("R2"));
 builder.Services.AddSingleton<Waao.Services.Abstractions.Services.IR2StorageService, Waao.Services.Storage.R2StorageService>();

@@ -8,4 +8,7 @@ public enum NotificationKind
 	MeetingUpdated = 3,
 	MeetingCancelled = 4,
 	FeatureRequestStatus = 5,
+	TimeOffRequested = 6,
+	TimeOffApproved = 7,
+	TimeOffRejected = 8,
 }
