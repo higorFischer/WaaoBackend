@@ -269,6 +269,7 @@ public sealed class NotificationService(
 		"meeting" => $"/meetings?meeting={linkId}",
 		"feature-request" => "/feature-requests",
 		"timeoff" => "/time-off",
+		"kudos" => "/kudos",
 		_ => "/",
 	};
 }

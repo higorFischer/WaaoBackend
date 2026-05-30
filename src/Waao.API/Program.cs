@@ -115,6 +115,9 @@ builder.Services.AddScoped<IFeedbackService, Waao.Services.Services.FeedbackServ
 // Time Off
 builder.Services.AddScoped<ITimeOffService, Waao.Services.Services.TimeOff.TimeOffService>();
 
+// Kudos
+builder.Services.AddScoped<IKudosService, Waao.Services.Services.Kudos.KudosService>();
+
 // R2 storage (used for chat attachments)
 builder.Services.Configure<Waao.Services.Storage.R2Options>(builder.Configuration.GetSection("R2"));
 builder.Services.AddSingleton<Waao.Services.Abstractions.Services.IR2StorageService, Waao.Services.Storage.R2StorageService>();

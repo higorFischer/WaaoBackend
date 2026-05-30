@@ -11,4 +11,5 @@ public enum NotificationKind
 	TimeOffRequested = 6,
 	TimeOffApproved = 7,
 	TimeOffRejected = 8,
+	KudoReceived = 9,
 }
