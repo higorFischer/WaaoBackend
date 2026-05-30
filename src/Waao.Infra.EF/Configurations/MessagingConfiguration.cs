@@ -84,7 +84,9 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
 		builder.ToTable("messages");
 		builder.HasKey(x => x.Id);
 
-		builder.Property(x => x.Body).IsRequired().HasMaxLength(4000);
+		// 8000 (not 4000): bodies are encrypted at rest (AES-GCM, base64) which is ~1.4x longer than
+		// the 4000-char plaintext cap. Plaintext length is still enforced by PostMessageValidator.
+		builder.Property(x => x.Body).IsRequired().HasMaxLength(8000);
 
 		builder.HasOne(x => x.Channel)
 			.WithMany(c => c.Messages)

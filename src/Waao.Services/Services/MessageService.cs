@@ -15,7 +15,8 @@ public sealed class MessageService(
 	INotificationService NotificationService,
 	IPushNotificationService Push,
 	IPresenceTracker Presence,
-	ILogger<MessageService> Logger) : IMessageService
+	ILogger<MessageService> Logger,
+	IMessageTextProtector Protector) : IMessageService
 {
 	// =====================================================================
 	// GET MESSAGES (with before-cursor pagination)
@@ -127,12 +128,13 @@ public sealed class MessageService(
 		if (string.IsNullOrWhiteSpace(dto.Body) && !hasAttachments)
 			throw new ArgumentException("Message must have a body or at least one attachment.");
 
+		var bodyText = dto.Body ?? string.Empty;
 		var message = new Message
 		{
 			Id = Guid.CreateVersion7(),
 			ChannelId = channelId,
 			AuthorId = authorId,
-			Body = dto.Body ?? string.Empty,
+			Body = Protector.Protect(bodyText), // encrypted at rest; mentions/preview below use the plaintext
 			ParentMessageId = parent?.Id,
 			CreatedAt = DateTime.UtcNow,
 		};
@@ -265,7 +267,7 @@ public sealed class MessageService(
 			AuthorId = message.AuthorId,
 			AuthorName = author.FullName,
 			AuthorPhotoUrl = author.PhotoUrl,
-			Body = message.Body,
+			Body = bodyText,
 			CreatedAtUtc = message.CreatedAt,
 			EditedAtUtc = null,
 			ParentMessageId = parent?.Id,
@@ -274,7 +276,7 @@ public sealed class MessageService(
 				Id = parent.Id,
 				AuthorId = parent.AuthorId,
 				AuthorName = parent.Author?.FullName ?? string.Empty,
-				Body = MentionParser.ToPlainText(parent.Body),
+				Body = MentionParser.ToPlainText(Protector.Unprotect(parent.Body) ?? string.Empty),
 			},
 			Mentions = mentionDtos,
 			Attachments = attachmentDtos,
@@ -308,7 +310,7 @@ public sealed class MessageService(
 		if (newBody.Length > 4000)
 			newBody = newBody[..4000];
 
-		message.Body = newBody;
+		message.Body = Protector.Protect(newBody);
 		message.EditedAtUtc = DateTime.UtcNow;
 		message.UpdatedAt = DateTime.UtcNow;
 		await Db.SaveChangesAsync(ct);
@@ -333,14 +335,14 @@ public sealed class MessageService(
 		return plain.Length > 120 ? plain[..120] + "…" : plain;
 	}
 
-	private static MessageDto MapToDto(Message m, List<MessageMention>? mentions) => new()
+	private MessageDto MapToDto(Message m, List<MessageMention>? mentions) => new()
 	{
 		Id = m.Id,
 		ChannelId = m.ChannelId,
 		AuthorId = m.AuthorId,
 		AuthorName = m.Author.FullName,
 		AuthorPhotoUrl = m.Author.PhotoUrl,
-		Body = m.Body,
+		Body = Protector.Unprotect(m.Body) ?? string.Empty,
 		CreatedAtUtc = m.CreatedAt,
 		EditedAtUtc = m.EditedAtUtc,
 		ParentMessageId = m.ParentMessageId,
@@ -349,7 +351,7 @@ public sealed class MessageService(
 			Id = m.ParentMessage.Id,
 			AuthorId = m.ParentMessage.AuthorId,
 			AuthorName = m.ParentMessage.Author?.FullName ?? string.Empty,
-			Body = MentionParser.ToPlainText(m.ParentMessage.Body),
+			Body = MentionParser.ToPlainText(Protector.Unprotect(m.ParentMessage.Body) ?? string.Empty),
 		},
 		Mentions = mentions?.Select(mm => new MessageMentionDto
 		{

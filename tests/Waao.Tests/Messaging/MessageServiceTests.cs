@@ -17,8 +17,8 @@ public class MessageServiceTests
 		Build()
 	{
 		var db = TestDb.New();
-		var chSvc = new ChannelService(db, NullNotificationService.Instance);
-		var msgSvc = new MessageService(db, NullNotificationService.Instance, NullPushNotificationService.Instance, NullPresenceTracker.Instance, NullLogger<MessageService>.Instance);
+		var chSvc = new ChannelService(db, NullNotificationService.Instance, NullMessageTextProtector.Instance);
+		var msgSvc = new MessageService(db, NullNotificationService.Instance, NullPushNotificationService.Instance, NullPresenceTracker.Instance, NullLogger<MessageService>.Instance, NullMessageTextProtector.Instance);
 		return (msgSvc, chSvc, db);
 	}
 

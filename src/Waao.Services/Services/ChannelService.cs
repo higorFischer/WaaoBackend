@@ -10,7 +10,8 @@ namespace Waao.Services.Services;
 
 public sealed class ChannelService(
 	WaaoDbContext Db,
-	INotificationService NotificationService) : IChannelService
+	INotificationService NotificationService,
+	IMessageTextProtector Protector) : IChannelService
 {
 	// =====================================================================
 	// LIST MY CHANNELS
@@ -133,7 +134,7 @@ public sealed class ChannelService(
 				IsMember = true,
 				IsMuted = membership.IsMuted,
 				UnreadCount = unreadByChannel.GetValueOrDefault(channel.Id, 0),
-				LastMessagePreview = PreviewOf(lastMsg?.Body),
+				LastMessagePreview = PreviewOf(Protector.Unprotect(lastMsg?.Body)),
 				LastMessageAtUtc = lastMsg?.CreatedAt,
 				OtherMember = otherMember,
 			});

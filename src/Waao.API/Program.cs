@@ -125,6 +125,9 @@ builder.Services.Configure<Waao.Services.Transcription.TranscriptionOptions>(bui
 
 // Messaging
 builder.Services.AddSingleton<IPresenceTracker, Waao.Services.Presence.PresenceTracker>();
+// Message body encryption at rest (AES-256-GCM). Key = Fly secret MessageCrypto__Key (base64 32 bytes); empty = off.
+builder.Services.Configure<Waao.Services.Security.MessageCryptoOptions>(builder.Configuration.GetSection("MessageCrypto"));
+builder.Services.AddSingleton<Waao.Services.Abstractions.Services.IMessageTextProtector, Waao.Services.Security.MessageTextProtector>();
 builder.Services.AddScoped<IChannelService, ChannelService>();
 builder.Services.AddScoped<IMessageService, MessageService>();
 builder.Services.AddSignalR();
