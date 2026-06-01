@@ -54,4 +54,14 @@ public class TimeOffController(ITimeOffService Service) : ControllerBase
 		await Service.CancelAsync(id, Me, ct);
 		return NoContent();
 	}
+
+	[HttpGet("balance")]
+	[ProducesResponseType(typeof(TimeOffBalanceDto), StatusCodes.Status200OK)]
+	public async Task<IActionResult> GetMyBalance([FromQuery] int? year, CancellationToken ct)
+		=> Ok(await Service.GetBalanceAsync(Me, year ?? DateTime.UtcNow.Year, ct));
+
+	[HttpGet("overlap")]
+	[ProducesResponseType(typeof(IReadOnlyList<TimeOffOverlapDto>), StatusCodes.Status200OK)]
+	public async Task<IActionResult> GetOverlap([FromQuery] DateOnly from, [FromQuery] DateOnly to, [FromQuery] Guid? exclude, CancellationToken ct)
+		=> Ok(await Service.GetOverlapsAsync(from, to, exclude, ct));
 }

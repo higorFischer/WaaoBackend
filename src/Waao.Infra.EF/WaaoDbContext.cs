@@ -9,6 +9,7 @@ using Waao.Domain.Models.Entities.Messaging;
 using Waao.Domain.Models.Entities.Notifications;
 using Waao.Domain.Models.Entities.Focus;
 using Waao.Domain.Models.Entities.Kudos;
+using Waao.Domain.Models.Entities.OneOnOnes;
 using Waao.Domain.Models.Entities.TimeOff;
 
 namespace Waao.Infra.EF;
@@ -91,6 +92,10 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 	public DbSet<WeeklyFocus> WeeklyFocuses => Set<WeeklyFocus>();
 	public DbSet<WeeklyFocusGoal> WeeklyFocusGoals => Set<WeeklyFocusGoal>();
 	public DbSet<WeeklyFocusProject> WeeklyFocusProjects => Set<WeeklyFocusProject>();
+
+	// 1:1s (manager <-> report meetings)
+	public DbSet<OneOnOne> OneOnOnes => Set<OneOnOne>();
+	public DbSet<OneOnOneActionItem> OneOnOneActionItems => Set<OneOnOneActionItem>();
 
 	// Internal feedback ("what's happening inside the company")
 	public DbSet<Waao.Domain.Models.Entities.Feedback.Feedback> Feedback => Set<Waao.Domain.Models.Entities.Feedback.Feedback>();

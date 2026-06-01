@@ -13,4 +13,7 @@ public enum NotificationKind
 	TimeOffRejected = 8,
 	KudoReceived = 9,
 	BadgeAwarded = 10,
+	SystemAnnouncement = 11,
+	OneOnOneScheduled = 12,
+	OneOnOneActionItemAssigned = 13,
 }

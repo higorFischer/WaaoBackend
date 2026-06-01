@@ -159,6 +159,66 @@ public sealed class TimeOffService(
 		Logger.LogInformation("Time off request {Id} cancelled by collaborator {CollaboratorId}.", id, collaboratorId);
 	}
 
+	private const int AnnualEntitledDays = 30; // CLT default; could be per-collaborator later.
+
+	public async Task<TimeOffBalanceDto> GetBalanceAsync(Guid collaboratorId, int year, CancellationToken ct = default)
+	{
+		var yearStart = new DateOnly(year, 1, 1);
+		var yearEnd = new DateOnly(year, 12, 31);
+
+		var rows = await Db.TimeOffRequests.AsNoTracking()
+			.Where(r => r.CollaboratorId == collaboratorId
+			            && r.Type == TimeOffType.Vacation
+			            && r.StartDate <= yearEnd
+			            && r.EndDate >= yearStart
+			            && (r.Status == TimeOffStatus.Approved || r.Status == TimeOffStatus.Pending))
+			.ToListAsync(ct);
+
+		int taken = 0, pending = 0;
+		foreach (var r in rows)
+		{
+			var clampedStart = r.StartDate < yearStart ? yearStart : r.StartDate;
+			var clampedEnd = r.EndDate > yearEnd ? yearEnd : r.EndDate;
+			var days = clampedEnd.DayNumber - clampedStart.DayNumber + 1;
+			if (r.Status == TimeOffStatus.Approved) taken += days;
+			else if (r.Status == TimeOffStatus.Pending) pending += days;
+		}
+
+		return new TimeOffBalanceDto
+		{
+			EntitledDays = AnnualEntitledDays,
+			TakenDays = taken,
+			PendingDays = pending,
+			RemainingDays = Math.Max(0, AnnualEntitledDays - taken),
+			Year = year,
+		};
+	}
+
+	public async Task<IReadOnlyList<TimeOffOverlapDto>> GetOverlapsAsync(DateOnly from, DateOnly to, Guid? excludeCollaboratorId, CancellationToken ct = default)
+	{
+		var query = Db.TimeOffRequests.AsNoTracking()
+			.Include(r => r.Collaborator).ThenInclude(c => c.Department)
+			.Where(r => (r.Status == TimeOffStatus.Approved || r.Status == TimeOffStatus.Pending)
+			            && r.StartDate <= to
+			            && r.EndDate >= from);
+
+		if (excludeCollaboratorId.HasValue)
+			query = query.Where(r => r.CollaboratorId != excludeCollaboratorId.Value);
+
+		var rows = await query.OrderBy(r => r.StartDate).ToListAsync(ct);
+
+		return rows.Select(r => new TimeOffOverlapDto
+		{
+			CollaboratorId = r.CollaboratorId,
+			CollaboratorName = r.CollaboratorName,
+			Type = r.Type,
+			StartDate = r.StartDate,
+			EndDate = r.EndDate,
+			Status = r.Status,
+			DepartmentName = r.Collaborator?.Department?.Name,
+		}).ToList();
+	}
+
 	private static TimeOffRequestDto ToDto(TimeOffRequest r) => new()
 	{
 		Id = r.Id,

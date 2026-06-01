@@ -41,3 +41,23 @@ public record TimeOffAbsenceDto
 	public DateOnly StartDate { get; init; }
 	public DateOnly EndDate { get; init; }
 }
+
+public record TimeOffBalanceDto
+{
+	public int EntitledDays { get; init; }
+	public int TakenDays { get; init; }
+	public int PendingDays { get; init; }
+	public int RemainingDays { get; init; }
+	public int Year { get; init; }
+}
+
+public record TimeOffOverlapDto
+{
+	public Guid CollaboratorId { get; init; }
+	public string CollaboratorName { get; init; } = string.Empty;
+	public TimeOffType Type { get; init; }
+	public DateOnly StartDate { get; init; }
+	public DateOnly EndDate { get; init; }
+	public TimeOffStatus Status { get; init; }
+	public string? DepartmentName { get; init; }
+}

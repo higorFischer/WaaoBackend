@@ -121,6 +121,12 @@ builder.Services.AddScoped<IKudosService, Waao.Services.Services.Kudos.KudosServ
 // Weekly Focus (admin-curated)
 builder.Services.AddScoped<IWeeklyFocusService, Waao.Services.Services.Focus.WeeklyFocusService>();
 
+// 1:1s
+builder.Services.AddScoped<IOneOnOneService, Waao.Services.Services.OneOnOnes.OneOnOneService>();
+
+// Anniversary / birthday celebrations (daily background tick)
+builder.Services.AddHostedService<Waao.API.HostedServices.AnniversaryHostedService>();
+
 // Badge admin (manual flair badges)
 builder.Services.AddScoped<IBadgeAdminService, Waao.Services.Services.Badges.BadgeAdminService>();
 
