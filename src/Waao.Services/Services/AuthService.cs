@@ -25,6 +25,7 @@ public sealed class AuthService(
 	IValidator<VerifyEmailDto> VerifyEmailValidator,
 	IValidator<ResendVerificationDto> ResendValidator,
 	IConfiguration Configuration,
+	ITenantContext TenantContext,
 	ILogger<AuthService> Logger) : IAuthService
 {
 	public async Task<AuthResultDto> LoginAsync(LoginDto dto, CancellationToken ct = default)
@@ -92,11 +93,16 @@ public sealed class AuthService(
 	{
 		await VerifyEmailValidator.ValidateAndThrowAsync(dto, ct);
 
+		// Pre-auth path: token lookup must cross tenants, then pin the tenant
+		// context so SaveChanges/streak/badge writes target the right tenant.
 		var c = await Db.Collaborators
+			.IgnoreQueryFilters()
+			.Where(x => !x.IsDeleted)
 			.Include(x => x.Department).Include(x => x.Role).Include(x => x.Manager).Include(x => x.Badges)
 			.FirstOrDefaultAsync(x => x.EmailVerificationToken == dto.Token, ct);
 		if (c is null || c.EmailVerificationTokenExpiresAt is null || c.EmailVerificationTokenExpiresAt < DateTime.UtcNow)
 			throw new InvalidVerificationTokenException();
+		if (c.TenantId is { } tid) TenantContext.SetTenant(tid);
 
 		c.EmailVerified = true;
 		c.EmailVerifiedAt = DateTime.UtcNow;
@@ -117,8 +123,13 @@ public sealed class AuthService(
 		await ResendValidator.ValidateAndThrowAsync(dto, ct);
 
 		var emailLower = dto.Email.Trim().ToLowerInvariant();
-		var c = await Db.Collaborators.FirstOrDefaultAsync(x => x.Email == emailLower, ct);
+		// Pre-auth path — cross-tenant search, pin the tenant after.
+		var c = await Db.Collaborators
+			.IgnoreQueryFilters()
+			.Where(x => !x.IsDeleted)
+			.FirstOrDefaultAsync(x => x.Email == emailLower, ct);
 		if (c is null || c.EmailVerified) return;
+		if (c.TenantId is { } tid) TenantContext.SetTenant(tid);
 		if (c.LastVerificationEmailSentAt is not null && (DateTime.UtcNow - c.LastVerificationEmailSentAt.Value).TotalSeconds < 60)
 			return;
 
@@ -230,13 +241,25 @@ public sealed class AuthService(
 		return CollaboratorMapper.ToDto(c);
 	}
 
+	/// <summary>
+	/// Email lookup runs PRE-AUTH (no JWT yet) so the global tenant filter would
+	/// silently scope it to the WAAO fallback and a Liberty user could never log
+	/// in. We <see cref="EntityFrameworkQueryableExtensions.IgnoreQueryFilters"/>
+	/// here, then pin the tenant context to the collaborator we found so any
+	/// downstream writes inside the request scope (streak ticks, badge unlocks)
+	/// land in the correct tenant.
+	/// </summary>
 	private async Task<Collaborator?> LoadByEmail(string email, CancellationToken ct)
 	{
 		var emailLower = email.Trim().ToLowerInvariant();
-		return await Db.Collaborators
+		var c = await Db.Collaborators
+			.IgnoreQueryFilters()
+			.Where(c => !c.IsDeleted)
 			.Include(c => c.Department).Include(c => c.Role)
 			.Include(c => c.Manager).Include(c => c.Badges)
 			.FirstOrDefaultAsync(c => c.Email == emailLower, ct);
+		if (c?.TenantId is { } tid) TenantContext.SetTenant(tid);
+		return c;
 	}
 
 	private AuthResultDto BuildResult(

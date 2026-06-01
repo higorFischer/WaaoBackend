@@ -16,8 +16,12 @@ public sealed class TenantService(
 	public async Task<IReadOnlyList<TenantDto>> ListForEmailAsync(string email, CancellationToken ct = default)
 	{
 		var emailLower = email.Trim().ToLowerInvariant();
+		// This endpoint is anonymous (login picker calls it before any JWT exists),
+		// so the global tenant filter would scope it to WAAO and Liberty would
+		// never appear. Ignore filters here — it's the whole point of the picker.
 		var collaborators = await Db.Collaborators.AsNoTracking()
-			.Where(c => c.Email == emailLower && c.TenantId != null)
+			.IgnoreQueryFilters()
+			.Where(c => !c.IsDeleted && c.Email == emailLower && c.TenantId != null)
 			.Select(c => c.TenantId!.Value)
 			.Distinct()
 			.ToListAsync(ct);
@@ -51,8 +55,13 @@ public sealed class TenantService(
 		var current = await Db.Collaborators.AsNoTracking().FirstOrDefaultAsync(c => c.Id == currentCollaboratorId, ct)
 			?? throw new UnauthorizedAccessException("Unknown collaborator.");
 
-		// Find the same email in the target tenant — that's the account the new JWT represents.
+		// The sister account lives in the TARGET tenant — by definition NOT the
+		// current tenant — so the global filter (which only allows the caller's
+		// tenant) would always return null here. Bypass filters and constrain by
+		// email + targetTenantId manually.
 		var sister = await Db.Collaborators
+			.IgnoreQueryFilters()
+			.Where(c => !c.IsDeleted)
 			.Include(c => c.Department).Include(c => c.Role).Include(c => c.Manager).Include(c => c.Badges)
 			.FirstOrDefaultAsync(c => c.Email == current.Email && c.TenantId == targetTenantId, ct)
 			?? throw new UnauthorizedAccessException("You don't have an account in that tenant.");
