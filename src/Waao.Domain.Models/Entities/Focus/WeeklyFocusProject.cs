@@ -13,5 +13,7 @@ public class WeeklyFocusProject : Entity
 	public string ProjectTitle { get; set; } = string.Empty;
 	public string ProjectColorHex { get; set; } = "#2A6B7E";
 
+	public Guid? ParentProjectId { get; set; }
+
 	public int Position { get; set; }
 }

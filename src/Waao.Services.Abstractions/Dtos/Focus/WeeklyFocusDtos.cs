@@ -34,6 +34,7 @@ public record WeeklyFocusProjectDto
 	public Guid ProjectId { get; init; }
 	public string ProjectTitle { get; init; } = string.Empty;
 	public string ProjectColorHex { get; init; } = "#2A6B7E";
+	public Guid? ParentProjectId { get; init; }
 	public int Position { get; init; }
 }
 

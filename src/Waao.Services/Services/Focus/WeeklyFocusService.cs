@@ -265,6 +265,7 @@ public sealed class WeeklyFocusService(
 				ProjectId = project.Id,
 				ProjectTitle = project.Title,
 				ProjectColorHex = project.ColorHex,
+				ParentProjectId = project.ParentProjectId,
 				Position = position++,
 				CreatedAt = now,
 			});
@@ -285,34 +286,40 @@ public sealed class WeeklyFocusService(
 			.Where(pid => focus.Projects.All(p => p.ProjectId != pid))
 			.ToList();
 
-		if (missing.Count > 0)
-		{
-			var projects = await Db.Projects.AsNoTracking()
-				.Where(p => missing.Contains(p.Id) && !p.IsDeleted)
-				.ToListAsync(ct);
+		var snapshot = await Db.Projects.AsNoTracking()
+			.Where(p => projectIds.Contains(p.Id) && !p.IsDeleted)
+			.ToDictionaryAsync(p => p.Id, ct);
 
-			foreach (var project in projects)
+		foreach (var pid in missing)
+		{
+			if (!snapshot.TryGetValue(pid, out var project)) continue;
+
+			focus.Projects.Add(new WeeklyFocusProject
 			{
-				focus.Projects.Add(new WeeklyFocusProject
-				{
-					Id = Guid.CreateVersion7(),
-					WeeklyFocusId = focus.Id,
-					ProjectId = project.Id,
-					ProjectTitle = project.Title,
-					ProjectColorHex = project.ColorHex,
-					CreatedAt = now,
-				});
-			}
+				Id = Guid.CreateVersion7(),
+				WeeklyFocusId = focus.Id,
+				ProjectId = project.Id,
+				ProjectTitle = project.Title,
+				ProjectColorHex = project.ColorHex,
+				ParentProjectId = project.ParentProjectId,
+				CreatedAt = now,
+			});
 		}
 
 		var position = 0;
 		foreach (var pid in projectIds)
 		{
 			var match = focus.Projects.FirstOrDefault(p => p.ProjectId == pid);
-			if (match is not null)
+			if (match is null) continue;
+
+			match.Position = position++;
+			match.UpdatedAt = now;
+
+			if (snapshot.TryGetValue(pid, out var live))
 			{
-				match.Position = position++;
-				match.UpdatedAt = now;
+				match.ProjectTitle = live.Title;
+				match.ProjectColorHex = live.ColorHex;
+				match.ParentProjectId = live.ParentProjectId;
 			}
 		}
 	}
@@ -361,6 +368,7 @@ public sealed class WeeklyFocusService(
 				ProjectId = p.ProjectId,
 				ProjectTitle = p.ProjectTitle,
 				ProjectColorHex = p.ProjectColorHex,
+				ParentProjectId = p.ParentProjectId,
 				Position = p.Position,
 			}).ToList(),
 	};
