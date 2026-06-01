@@ -22,7 +22,9 @@ public class CollaboratorConfiguration : IEntityTypeConfiguration<Collaborator>
 		builder.Property(x => x.EmailVerified).HasDefaultValue(false);
 		builder.HasIndex(x => x.EmailVerificationToken).HasFilter("email_verification_token IS NOT NULL");
 
-		builder.HasIndex(x => x.Email).IsUnique().HasFilter("is_deleted = false");
+		// Email uniqueness is PER TENANT, not global — same person can have an
+		// account in WAAO and in Liberty under the same email address.
+		builder.HasIndex(x => new { x.Email, x.TenantId }).IsUnique().HasFilter("is_deleted = false");
 
 		builder.HasOne(x => x.Department)
 			.WithMany(d => d.Collaborators)
