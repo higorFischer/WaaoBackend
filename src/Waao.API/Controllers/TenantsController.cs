@@ -38,14 +38,14 @@ public class TenantsController(ITenantService Service) : ControllerBase
 
 	/// <summary>Every tenant — admin/super-admin only.</summary>
 	[HttpGet]
-	[Authorize(Policy = "Admin")]
+	[Authorize(Policy = "SuperAdmin")]
 	[ProducesResponseType(typeof(IReadOnlyList<TenantDto>), StatusCodes.Status200OK)]
 	public async Task<IActionResult> ListAll(CancellationToken ct)
 		=> Ok(await Service.ListAllAsync(ct));
 
 	/// <summary>Create a new tenant. Mirrors the calling admin into it as the first member.</summary>
 	[HttpPost]
-	[Authorize(Policy = "Admin")]
+	[Authorize(Policy = "SuperAdmin")]
 	[ProducesResponseType(typeof(TenantDto), StatusCodes.Status201Created)]
 	[ProducesResponseType(StatusCodes.Status409Conflict)]
 	public async Task<IActionResult> Create([FromBody] CreateTenantDto dto, CancellationToken ct)
@@ -53,7 +53,7 @@ public class TenantsController(ITenantService Service) : ControllerBase
 
 	/// <summary>Update a tenant's display fields.</summary>
 	[HttpPut("{id:guid}")]
-	[Authorize(Policy = "Admin")]
+	[Authorize(Policy = "SuperAdmin")]
 	[ProducesResponseType(typeof(TenantDto), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public async Task<IActionResult> Update(Guid id, [FromBody] UpdateTenantDto dto, CancellationToken ct)
@@ -65,7 +65,7 @@ public class TenantsController(ITenantService Service) : ControllerBase
 	/// re-issues the token. Used to bootstrap empty tenants from the admin UI.
 	/// </summary>
 	[HttpPost("{id:guid}/join")]
-	[Authorize(Policy = "Admin")]
+	[Authorize(Policy = "SuperAdmin")]
 	[ProducesResponseType(typeof(AuthResultDto), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public async Task<IActionResult> Join(Guid id, CancellationToken ct)

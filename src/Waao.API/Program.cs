@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
 using FluentValidation;
@@ -77,6 +78,14 @@ builder.Services.AddAuthorization(options =>
 	options.AddPolicy("Admin",        p => p.RequireRole(CollaboratorRoleKind.Admin.ToString()));
 	options.AddPolicy("HR",           p => p.RequireRole(CollaboratorRoleKind.Admin.ToString(), CollaboratorRoleKind.HR.ToString()));
 	options.AddPolicy("Collaborator", p => p.RequireAuthenticatedUser());
+	// SuperAdmin = the single platform owner identified by email. Used for
+	// cross-tenant operations (creating workspaces, joining empty tenants).
+	// Source of truth lives in AdminService.SuperAdminEmail; the policy mirrors it.
+	options.AddPolicy("SuperAdmin",   p => p.RequireAssertion(ctx =>
+		string.Equals(
+			ctx.User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Email),
+			Waao.Services.Services.AdminService.SuperAdminEmail,
+			StringComparison.OrdinalIgnoreCase)));
 	// Default fallback: every endpoint requires auth unless [AllowAnonymous]
 	options.FallbackPolicy = new AuthorizationPolicyBuilder()
 		.RequireAuthenticatedUser()
