@@ -134,6 +134,9 @@ builder.Services.AddScoped<IPeerFeedbackService, Waao.Services.Services.Feedback
 // Announcements (scheduled banners)
 builder.Services.AddScoped<IAnnouncementService, Waao.Services.Services.Announcements.AnnouncementService>();
 
+// Multi-tenancy — scoped TenantContext populated per-request from the JWT claim.
+builder.Services.AddScoped<ITenantContext, Waao.Services.Tenancy.TenantContext>();
+
 // Anniversary / birthday celebrations (daily background tick)
 builder.Services.AddHostedService<Waao.API.HostedServices.AnniversaryHostedService>();
 

@@ -115,9 +115,33 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 	// Messaging — attachments
 	public DbSet<Waao.Domain.Models.Entities.Messaging.MessageAttachment> MessageAttachments => Set<Waao.Domain.Models.Entities.Messaging.MessageAttachment>();
 
+	// Multi-tenancy boundary.
+	public DbSet<Tenant> Tenants => Set<Tenant>();
+
 	protected override void OnModelCreating(ModelBuilder modelBuilder)
 	{
 		base.OnModelCreating(modelBuilder);
 		modelBuilder.ApplyConfigurationsFromAssembly(typeof(WaaoDbContext).Assembly);
+
+		// --- Multi-tenancy: add a shadow 'TenantId' (uuid, nullable in Phase 1) to every
+		// entity except Tenant itself. Shadow properties keep this zero-touch on the domain
+		// model — entity classes don't need to know about TenantId. Nullable for now so the
+		// initial migration can backfill existing rows safely; later phases will tighten
+		// to NOT NULL and turn on the global query filter.
+		foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+		{
+			if (entityType.ClrType == typeof(Tenant)) continue;
+			if (entityType.IsOwned()) continue;
+
+			var tenantIdProp = entityType.FindProperty("TenantId");
+			if (tenantIdProp is null)
+			{
+				modelBuilder.Entity(entityType.ClrType)
+					.Property<Guid?>("TenantId");
+			}
+
+			// Index so per-tenant filtering stays fast once the query filter turns on.
+			modelBuilder.Entity(entityType.ClrType).HasIndex("TenantId");
+		}
 	}
 }
