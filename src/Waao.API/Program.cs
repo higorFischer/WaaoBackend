@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -167,7 +168,11 @@ builder.Services.Configure<Waao.Services.Security.MessageCryptoOptions>(builder.
 builder.Services.AddSingleton<Waao.Services.Abstractions.Services.IMessageTextProtector, Waao.Services.Security.MessageTextProtector>();
 builder.Services.AddScoped<IChannelService, ChannelService>();
 builder.Services.AddScoped<IMessageService, MessageService>();
-builder.Services.AddSignalR();
+builder.Services.AddSignalR(options =>
+{
+	options.AddFilter<TenantHubFilter>();
+});
+builder.Services.AddSingleton<TenantHubFilter>();
 
 // Notifications
 builder.Services.Configure<Waao.Services.Push.VapidOptions>(builder.Configuration.GetSection("Vapid"));

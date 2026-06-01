@@ -6,6 +6,7 @@ using Waao.Domain.Models.Enums;
 using Waao.Infra.EF;
 using Waao.Services.Abstractions.Services;
 using Waao.Services.Gamification;
+using Waao.Services.Tenancy;
 
 namespace Waao.API.HostedServices;
 
@@ -45,7 +46,37 @@ public sealed class AnniversaryHostedService(IServiceScopeFactory ScopeFactory, 
 
 	private async Task RunOnceAsync(CancellationToken ct)
 	{
+		// Multi-tenant: discover tenants first (without any tenant filter so we see them all),
+		// then for each tenant create a fresh scope, set the tenant context, and run the
+		// per-tenant tick. Crashes in one tenant don't block the others.
+		Guid[] tenantIds;
+		using (var discoveryScope = ScopeFactory.CreateScope())
+		{
+			var discoveryDb = discoveryScope.ServiceProvider.GetRequiredService<WaaoDbContext>();
+			tenantIds = await discoveryDb.Tenants
+				.Where(t => t.IsActive && !t.IsDeleted)
+				.Select(t => t.Id)
+				.ToArrayAsync(ct);
+		}
+
+		foreach (var tenantId in tenantIds)
+		{
+			try
+			{
+				await RunForTenantAsync(tenantId, ct);
+			}
+			catch (Exception ex) when (!ct.IsCancellationRequested)
+			{
+				Logger.LogError(ex, "Anniversary tick failed for tenant {TenantId}; continuing with the next tenant.", tenantId);
+			}
+		}
+	}
+
+	private async Task RunForTenantAsync(Guid tenantId, CancellationToken ct)
+	{
 		using var scope = ScopeFactory.CreateScope();
+		scope.ServiceProvider.GetRequiredService<ITenantContext>().SetTenant(tenantId);
+
 		var db = scope.ServiceProvider.GetRequiredService<WaaoDbContext>();
 		var notifications = scope.ServiceProvider.GetRequiredService<INotificationService>();
 		var gamification = scope.ServiceProvider.GetRequiredService<GamificationEngine>();
@@ -57,7 +88,7 @@ public sealed class AnniversaryHostedService(IServiceScopeFactory ScopeFactory, 
 		var alreadyRan = await db.XpTransactions.AnyAsync(x => x.Reason == markerKey, ct);
 		if (alreadyRan)
 		{
-			Logger.LogInformation("Anniversary already processed for {Today}.", today);
+			Logger.LogInformation("Anniversary already processed for tenant {TenantId} on {Today}.", tenantId, today);
 			return;
 		}
 
@@ -72,8 +103,8 @@ public sealed class AnniversaryHostedService(IServiceScopeFactory ScopeFactory, 
 			.Select(c => new { Collaborator = c, Years = today.Year - c.JoinDate.Year })
 			.ToList();
 
-		Logger.LogInformation("Anniversary tick {Today}: {Birthdays} birthdays, {Anniversaries} work anniversaries.",
-			today, birthdayPeople.Count, anniversaryPeople.Count);
+		Logger.LogInformation("Anniversary tick tenant {TenantId} {Today}: {Birthdays} birthdays, {Anniversaries} work anniversaries.",
+			tenantId, today, birthdayPeople.Count, anniversaryPeople.Count);
 
 		foreach (var c in birthdayPeople)
 		{
