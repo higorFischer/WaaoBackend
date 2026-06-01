@@ -21,4 +21,11 @@ public interface IPushNotificationService
 	/// private key is configured. Expired endpoints (404/410) are pruned automatically.
 	/// </summary>
 	Task SendToCollaboratorAsync(Guid collaboratorId, string title, string body, string? url, CancellationToken ct = default);
+
+	/// <summary>
+	/// Rich variant. <paramref name="iconUrl"/> shows next to the notification (sender avatar
+	/// works great for chat). <paramref name="tag"/> deduplicates: a new push with the same tag
+	/// replaces the previous one, so a channel doesn't pile up six toasts.
+	/// </summary>
+	Task SendRichToCollaboratorAsync(Guid collaboratorId, string title, string body, string? url, string? iconUrl, string? tag, CancellationToken ct = default);
 }

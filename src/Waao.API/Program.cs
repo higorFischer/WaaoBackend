@@ -124,6 +124,10 @@ builder.Services.AddScoped<IWeeklyFocusService, Waao.Services.Services.Focus.Wee
 // 1:1s
 builder.Services.AddScoped<IOneOnOneService, Waao.Services.Services.OneOnOnes.OneOnOneService>();
 
+// Call channels (Discord-style voice rooms)
+builder.Services.AddSingleton<ICallPresenceTracker, Waao.Services.Services.Calls.CallPresenceTracker>();
+builder.Services.AddScoped<ICallChannelService, Waao.Services.Services.Calls.CallChannelService>();
+
 // Anniversary / birthday celebrations (daily background tick)
 builder.Services.AddHostedService<Waao.API.HostedServices.AnniversaryHostedService>();
 
@@ -265,6 +269,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<MessagingHub>("/hubs/messaging");
+app.MapHub<Waao.API.Hubs.CallsHub>("/hubs/calls");
 
 app.MapGet("/", () => Results.Redirect("/swagger")).AllowAnonymous();
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", service = "waao-api", timestamp = DateTime.UtcNow }))

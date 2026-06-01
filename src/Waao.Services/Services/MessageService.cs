@@ -260,11 +260,15 @@ public sealed class MessageService(
 				var channel = await Db.Channels.AsNoTracking().FirstOrDefaultAsync(c => c.Id == channelId, ct);
 				var isDm = channel?.Kind == ChannelKind.DirectMessage;
 				var preview = BuildPushPreview(dto.Body, hasAttachments);
-				var title = isDm ? author.FullName : channel?.Name ?? "WAAO";
+				// Clean three-part format: title = channel (or DM sender), body = "Sender: msg"
+				// (DMs skip the redundant prefix). Sender avatar carries identity.
+				var title = isDm ? author.FullName : $"# {channel?.Name ?? "WAAO"}";
 				var pushBody = isDm ? preview : $"{author.FullName}: {preview}";
 				var url = $"/messages?channel={channelId}";
+				var iconUrl = author.PhotoUrl; // sender avatar = personal, distinctive
+				var tag = $"chat:{channelId}";  // collapse repeats per channel
 				foreach (var recipientId in pushRecipients)
-					await Push.SendToCollaboratorAsync(recipientId, title, pushBody, url, ct);
+					await Push.SendRichToCollaboratorAsync(recipientId, title, pushBody, url, iconUrl, tag, ct);
 			}
 		}
 		catch (Exception ex)

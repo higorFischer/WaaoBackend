@@ -81,7 +81,10 @@ public sealed class PushNotificationService(
 	// SEND
 	// =====================================================================
 
-	public async Task SendToCollaboratorAsync(Guid collaboratorId, string title, string body, string? url, CancellationToken ct = default)
+	public Task SendToCollaboratorAsync(Guid collaboratorId, string title, string body, string? url, CancellationToken ct = default)
+		=> SendRichToCollaboratorAsync(collaboratorId, title, body, url, null, null, ct);
+
+	public async Task SendRichToCollaboratorAsync(Guid collaboratorId, string title, string body, string? url, string? iconUrl, string? tag, CancellationToken ct = default)
 	{
 		if (string.IsNullOrWhiteSpace(Vapid.Value.PrivateKey))
 		{
@@ -99,7 +102,7 @@ public sealed class PushNotificationService(
 
 		var vapidDetails = new VapidDetails(Vapid.Value.Subject, Vapid.Value.PublicKey, Vapid.Value.PrivateKey);
 		var client = new WebPushClient();
-		var payload = JsonSerializer.Serialize(new { title, body, url });
+		var payload = JsonSerializer.Serialize(new { title, body, url, icon = iconUrl, tag });
 
 		foreach (var s in subscriptions)
 		{
