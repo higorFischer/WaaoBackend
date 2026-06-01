@@ -4,6 +4,11 @@ namespace Waao.Domain.Models.Entities;
 
 public class Collaborator : Entity
 {
+	/// <summary>The tenant this collaborator belongs to. Phase 1 added the column nullable
+	/// and backfilled to WAAO; later phases tighten to NOT NULL.</summary>
+	public Guid? TenantId { get; set; }
+	public virtual Tenant? Tenant { get; set; }
+
 	public string FullName { get; set; } = string.Empty;
 	public string Email { get; set; } = string.Empty;
 	public string? Cpf { get; set; }

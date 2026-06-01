@@ -25,6 +25,11 @@ public sealed class JwtIssuer(JwtSettings Settings)
 			new("name", c.FullName),
 			new(ClaimTypes.Role, c.RoleKind.ToString()),
 		};
+		// Multi-tenancy: carry the tenant in the token so middleware can populate
+		// ITenantContext without a DB roundtrip. Pre-multi-tenant tokens lacking
+		// this claim are accepted but treated as the WAAO default by the middleware.
+		if (c.TenantId.HasValue)
+			claims.Add(new Claim("tenant_id", c.TenantId.Value.ToString()));
 
 		var token = new JwtSecurityToken(
 			issuer: Settings.Issuer,

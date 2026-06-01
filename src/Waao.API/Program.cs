@@ -26,8 +26,13 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Database — DATABASE_URL (Fly Postgres, postgres:// form) takes precedence over config
 var connectionString = BuildConnectionString(builder.Configuration);
-builder.Services.AddDbContext<WaaoDbContext>(options =>
-	options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention());
+builder.Services.AddScoped<Waao.Services.Tenancy.TenantSaveChangesInterceptor>();
+builder.Services.AddDbContext<WaaoDbContext>((sp, options) =>
+{
+	options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention();
+	// Phase 2: stamp tenant_id on every new row from the request's ITenantContext.
+	options.AddInterceptors(sp.GetRequiredService<Waao.Services.Tenancy.TenantSaveChangesInterceptor>());
+});
 
 // JWT settings — bind from config, fall back to a dev-only key
 var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>() ?? new JwtSettings();
@@ -136,6 +141,7 @@ builder.Services.AddScoped<IAnnouncementService, Waao.Services.Services.Announce
 
 // Multi-tenancy — scoped TenantContext populated per-request from the JWT claim.
 builder.Services.AddScoped<ITenantContext, Waao.Services.Tenancy.TenantContext>();
+builder.Services.AddScoped<ITenantService, Waao.Services.Tenancy.TenantService>();
 
 // Anniversary / birthday celebrations (daily background tick)
 builder.Services.AddHostedService<Waao.API.HostedServices.AnniversaryHostedService>();
@@ -275,6 +281,9 @@ if (app.Environment.IsDevelopment())
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors("Frontend");
 app.UseAuthentication();
+// Multi-tenancy: must run after auth (needs the parsed JWT claims) and before any
+// route handler so ITenantContext is populated for the whole pipeline.
+app.UseMiddleware<Waao.API.Middleware.TenantResolutionMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<MessagingHub>("/hubs/messaging");
