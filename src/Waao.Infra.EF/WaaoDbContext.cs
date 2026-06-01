@@ -141,6 +141,7 @@ public class WaaoDbContext : DbContext
 
 	// Multi-tenancy boundary.
 	public DbSet<Tenant> Tenants => Set<Tenant>();
+	public DbSet<TenantAllowedEmailDomain> TenantAllowedEmailDomains => Set<TenantAllowedEmailDomain>();
 
 	protected override void OnModelCreating(ModelBuilder modelBuilder)
 	{
@@ -151,6 +152,9 @@ public class WaaoDbContext : DbContext
 		foreach (var entityType in modelBuilder.Model.GetEntityTypes())
 		{
 			if (entityType.ClrType == typeof(Tenant)) continue;
+			// Allowlist read pre-auth (registration) and pre-tenant-context — must
+			// stay cross-tenant queryable. The entity owns TenantId as a real FK.
+			if (entityType.ClrType == typeof(TenantAllowedEmailDomain)) continue;
 			if (entityType.IsOwned()) continue;
 
 			var tenantIdProp = entityType.FindProperty("TenantId");

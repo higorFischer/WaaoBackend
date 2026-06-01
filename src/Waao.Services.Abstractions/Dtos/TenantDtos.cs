@@ -31,3 +31,14 @@ public record UpdateTenantDto
 	public string? LogoUrl { get; init; }
 	public bool IsActive { get; init; } = true;
 }
+
+public record TenantAllowedDomainDto
+{
+	public Guid Id { get; init; }
+	public string Domain { get; init; } = string.Empty;
+}
+
+public record AddAllowedDomainDto
+{
+	public string Domain { get; init; } = string.Empty;
+}

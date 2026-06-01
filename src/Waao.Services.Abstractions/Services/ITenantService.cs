@@ -35,4 +35,20 @@ public interface ITenantService
 	/// can step into them via the sidebar switcher.
 	/// </summary>
 	Task<AuthResultDto> JoinAsync(Guid currentCollaboratorId, Guid targetTenantId, CancellationToken ct = default);
+
+	/// <summary>Lists the email domains a tenant has allowlisted for self-registration.</summary>
+	Task<IReadOnlyList<TenantAllowedDomainDto>> ListAllowedDomainsAsync(Guid tenantId, CancellationToken ct = default);
+
+	/// <summary>Adds an email domain to a tenant's allowlist (idempotent).</summary>
+	Task<TenantAllowedDomainDto> AddAllowedDomainAsync(Guid tenantId, string domain, CancellationToken ct = default);
+
+	/// <summary>Removes (soft-delete) an allowed domain by row id.</summary>
+	Task RemoveAllowedDomainAsync(Guid id, CancellationToken ct = default);
+
+	/// <summary>
+	/// Looks up the tenant that owns the given email's domain. Used at registration to route
+	/// the new collaborator to the right tenant. Returns null when no tenant has allowlisted
+	/// the domain.
+	/// </summary>
+	Task<Guid?> ResolveTenantByEmailDomainAsync(string email, CancellationToken ct = default);
 }

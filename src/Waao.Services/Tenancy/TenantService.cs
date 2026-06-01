@@ -219,6 +219,82 @@ public sealed class TenantService(
 		return ToDto(tenant);
 	}
 
+	public async Task<IReadOnlyList<TenantAllowedDomainDto>> ListAllowedDomainsAsync(Guid tenantId, CancellationToken ct = default)
+	{
+		var rows = await Db.TenantAllowedEmailDomains.AsNoTracking()
+			.Where(d => d.TenantId == tenantId)
+			.OrderBy(d => d.Domain)
+			.Select(d => new TenantAllowedDomainDto { Id = d.Id, Domain = d.Domain })
+			.ToListAsync(ct);
+		return rows;
+	}
+
+	public async Task<TenantAllowedDomainDto> AddAllowedDomainAsync(Guid tenantId, string domain, CancellationToken ct = default)
+	{
+		var normalized = NormalizeDomain(domain);
+		if (normalized.Length == 0) throw new ArgumentException("Domain is required.", nameof(domain));
+
+		// Idempotent: return the existing row if the tenant already owns this domain.
+		var existing = await Db.TenantAllowedEmailDomains
+			.FirstOrDefaultAsync(d => d.TenantId == tenantId && d.Domain == normalized, ct);
+		if (existing is not null)
+			return new TenantAllowedDomainDto { Id = existing.Id, Domain = existing.Domain };
+
+		// Cross-tenant uniqueness check — same domain can't be claimed by two tenants
+		// because that would make registration routing ambiguous.
+		var claimed = await Db.TenantAllowedEmailDomains.AsNoTracking()
+			.AnyAsync(d => d.Domain == normalized && d.TenantId != tenantId, ct);
+		if (claimed)
+			throw new InvalidOperationException($"Domain '{normalized}' is already allowlisted by another tenant.");
+
+		var row = new Domain.Models.Entities.TenantAllowedEmailDomain
+		{
+			Id = Guid.CreateVersion7(),
+			TenantId = tenantId,
+			Domain = normalized,
+		};
+		Db.TenantAllowedEmailDomains.Add(row);
+		await Db.SaveChangesAsync(ct);
+		return new TenantAllowedDomainDto { Id = row.Id, Domain = row.Domain };
+	}
+
+	public async Task RemoveAllowedDomainAsync(Guid id, CancellationToken ct = default)
+	{
+		var row = await Db.TenantAllowedEmailDomains.FirstOrDefaultAsync(d => d.Id == id, ct);
+		if (row is null) return;
+		row.IsDeleted = true;
+		row.DeletedAt = DateTime.UtcNow;
+		row.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+	}
+
+	public async Task<Guid?> ResolveTenantByEmailDomainAsync(string email, CancellationToken ct = default)
+	{
+		var domain = ExtractDomain(email);
+		if (domain.Length == 0) return null;
+		return await Db.TenantAllowedEmailDomains.AsNoTracking()
+			.Where(d => d.Domain == domain)
+			.Select(d => (Guid?)d.TenantId)
+			.FirstOrDefaultAsync(ct);
+	}
+
+	private static string NormalizeDomain(string raw)
+	{
+		var s = (raw ?? string.Empty).Trim().ToLowerInvariant();
+		if (s.StartsWith('@')) s = s[1..];
+		// Strip a leading scheme if someone pasted a URL.
+		var at = s.IndexOf('@');
+		if (at >= 0) s = s[(at + 1)..];
+		return s;
+	}
+
+	private static string ExtractDomain(string email)
+	{
+		var s = (email ?? string.Empty).Trim().ToLowerInvariant();
+		var at = s.LastIndexOf('@');
+		return at < 0 || at == s.Length - 1 ? string.Empty : s[(at + 1)..];
+	}
+
 	private static TenantDto ToDto(Domain.Models.Entities.Tenant t) => new()
 	{
 		Id = t.Id,

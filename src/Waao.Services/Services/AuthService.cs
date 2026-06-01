@@ -26,6 +26,7 @@ public sealed class AuthService(
 	IValidator<ResendVerificationDto> ResendValidator,
 	IConfiguration Configuration,
 	ITenantContext TenantContext,
+	ITenantService TenantService,
 	ILogger<AuthService> Logger) : IAuthService
 {
 	public async Task<AuthResultDto> LoginAsync(LoginDto dto, CancellationToken ct = default)
@@ -57,34 +58,72 @@ public sealed class AuthService(
 
 		var emailLower = dto.Email.Trim().ToLowerInvariant();
 
-		if (await Db.Collaborators.AnyAsync(c => c.Email == emailLower, ct))
+		// Route the registration by email domain. Tenants must allowlist a domain
+		// before someone can self-register at it — that's the gating mechanism.
+		// Falls back to WAAO when NO tenant has allowlisted any domain yet
+		// (bootstrap path so the platform owner doesn't get locked out).
+		var routedTenantId = await TenantService.ResolveTenantByEmailDomainAsync(emailLower, ct);
+		var anyAllowlistConfigured = await Db.TenantAllowedEmailDomains.AsNoTracking().AnyAsync(ct);
+		if (routedTenantId is null && anyAllowlistConfigured)
+		{
+			throw new FluentValidation.ValidationException(
+				[new FluentValidation.Results.ValidationFailure("email", "Your email domain isn't enabled. Ask your workspace admin to allowlist it.")]);
+		}
+		var tenantId = routedTenantId ?? Tenancy.TenantConstants.WaaoTenantId;
+
+		// Per-tenant uniqueness: same email CAN exist in another tenant, but not
+		// twice in the same tenant. IgnoreQueryFilters because we're pre-auth.
+		var duplicate = await Db.Collaborators.IgnoreQueryFilters()
+			.AnyAsync(c => c.Email == emailLower && c.TenantId == tenantId && !c.IsDeleted, ct);
+		if (duplicate)
 			throw new FluentValidation.ValidationException(
 				[new FluentValidation.Results.ValidationFailure("email", "Email is already in use.")]);
 
 		var adminEmails = Configuration.GetSection("Auth:AdminEmails").Get<string[]>() ?? [];
 		var isAdmin = adminEmails.Any(e => string.Equals(e, emailLower, StringComparison.OrdinalIgnoreCase));
 
+		// Auto-verify when the registration was routed via an allowlisted domain —
+		// the tenant has already vouched for everyone there, so the email
+		// round-trip would just be ceremony.
+		var trustedDomain = routedTenantId is not null;
+
 		var entity = new Collaborator
 		{
 			Id = Guid.CreateVersion7(),
+			TenantId = tenantId,
 			FullName = dto.FullName,
 			Email = emailLower,
 			JoinDate = dto.JoinDate,
 			RoleKind = isAdmin ? Domain.Models.Enums.CollaboratorRoleKind.Admin : Domain.Models.Enums.CollaboratorRoleKind.Collaborator,
 			PasswordHash = PasswordHasher.Hash(dto.Password),
-			EmailVerified = false,
-			EmailVerificationToken = NewToken(),
-			EmailVerificationTokenExpiresAt = DateTime.UtcNow.AddHours(24),
-			LastVerificationEmailSentAt = DateTime.UtcNow,
+			EmailVerified = trustedDomain,
+			EmailVerifiedAt = trustedDomain ? DateTime.UtcNow : null,
+			EmailVerificationToken = trustedDomain ? null : NewToken(),
+			EmailVerificationTokenExpiresAt = trustedDomain ? null : DateTime.UtcNow.AddHours(24),
+			LastVerificationEmailSentAt = trustedDomain ? null : DateTime.UtcNow,
 		};
 		Db.Collaborators.Add(entity);
 		await Db.SaveChangesAsync(ct);
 
+		if (trustedDomain)
+		{
+			Logger.LogInformation("Registered {Email} into tenant {Tenant} via allowlisted domain — skipped email verification.", emailLower, tenantId);
+			return new RegisterResultDto { Status = "auto_verified", Email = entity.Email };
+		}
+
 		var baseUrl = Configuration["Frontend:BaseUrl"] ?? "https://waao-frontend.higorflopes.workers.dev";
 		var verifyUrl = $"{baseUrl}/verify-email?token={entity.EmailVerificationToken}";
-		try { await EmailSender.SendVerificationAsync(entity.Email, entity.FullName, verifyUrl, ct); }
+		try
+		{
+			await EmailSender.SendVerificationAsync(entity.Email, entity.FullName, verifyUrl, ct);
+		}
 		catch (OperationCanceledException) { throw; }
-		catch (Exception ex) { Logger.LogError(ex, "Verification email send failed for {Email}", entity.Email); }
+		catch (Exception ex)
+		{
+			// Diagnostic: surface the actual provider error so the operator can fix Resend domain
+			// verification, API key, etc. — instead of "email_not_verified" forever.
+			Logger.LogError(ex, "Verification email send failed for {Email}. verifyUrl={VerifyUrl}", entity.Email, verifyUrl);
+		}
 
 		return new RegisterResultDto { Status = "verification_sent", Email = entity.Email };
 	}
@@ -141,9 +180,20 @@ public sealed class AuthService(
 
 		var baseUrl = Configuration["Frontend:BaseUrl"] ?? "https://waao-frontend.higorflopes.workers.dev";
 		var verifyUrl = $"{baseUrl}/verify-email?token={c.EmailVerificationToken}";
-		try { await EmailSender.SendVerificationAsync(c.Email, c.FullName, verifyUrl, ct); }
+		try
+		{
+			await EmailSender.SendVerificationAsync(c.Email, c.FullName, verifyUrl, ct);
+			Logger.LogInformation("Resent verification email to {Email} (token regenerated).", c.Email);
+		}
 		catch (OperationCanceledException) { throw; }
-		catch (Exception ex) { Logger.LogError(ex, "Resend verification email failed for {Email}", c.Email); }
+		catch (Exception ex)
+		{
+			// Don't swallow silently — re-throw so the controller returns a 500 and the user
+			// sees an error instead of "we sent it!" while the email never goes out. The
+			// caller (frontend) can render a generic "couldn't send right now, try again".
+			Logger.LogError(ex, "Resend verification email failed for {Email}. verifyUrl={VerifyUrl}", c.Email, verifyUrl);
+			throw new InvalidOperationException("Could not send verification email. Try again in a minute.", ex);
+		}
 	}
 
 	public async Task ChangePasswordAsync(Guid collaboratorId, ChangePasswordDto dto, CancellationToken ct = default)

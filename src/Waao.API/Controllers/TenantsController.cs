@@ -70,4 +70,29 @@ public class TenantsController(ITenantService Service) : ControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public async Task<IActionResult> Join(Guid id, CancellationToken ct)
 		=> Ok(await Service.JoinAsync(Me, id, ct));
+
+	/// <summary>Email domains a tenant has allowlisted for self-registration.</summary>
+	[HttpGet("{id:guid}/allowed-domains")]
+	[Authorize(Policy = "SuperAdmin")]
+	[ProducesResponseType(typeof(IReadOnlyList<TenantAllowedDomainDto>), StatusCodes.Status200OK)]
+	public async Task<IActionResult> ListAllowedDomains(Guid id, CancellationToken ct)
+		=> Ok(await Service.ListAllowedDomainsAsync(id, ct));
+
+	/// <summary>Allowlist a new email domain for the tenant.</summary>
+	[HttpPost("{id:guid}/allowed-domains")]
+	[Authorize(Policy = "SuperAdmin")]
+	[ProducesResponseType(typeof(TenantAllowedDomainDto), StatusCodes.Status201Created)]
+	[ProducesResponseType(StatusCodes.Status409Conflict)]
+	public async Task<IActionResult> AddAllowedDomain(Guid id, [FromBody] AddAllowedDomainDto dto, CancellationToken ct)
+		=> Created(string.Empty, await Service.AddAllowedDomainAsync(id, dto.Domain, ct));
+
+	/// <summary>Removes an allowlisted domain by row id.</summary>
+	[HttpDelete("allowed-domains/{domainId:guid}")]
+	[Authorize(Policy = "SuperAdmin")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	public async Task<IActionResult> RemoveAllowedDomain(Guid domainId, CancellationToken ct)
+	{
+		await Service.RemoveAllowedDomainAsync(domainId, ct);
+		return NoContent();
+	}
 }
