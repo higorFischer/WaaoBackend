@@ -133,6 +133,6 @@ public class AllocationsController(IAllocationService Service) : ControllerBase
 
 	[HttpGet("history/project/{projectId:guid}")]
 	[ProducesResponseType(typeof(ProjectHistoryDto), StatusCodes.Status200OK)]
-	public async Task<IActionResult> GetProjectHistory(Guid projectId, CancellationToken ct)
-		=> Ok(await Service.GetProjectHistoryAsync(projectId, ct));
+	public async Task<IActionResult> GetProjectHistory(Guid projectId, [FromQuery] DateTime? fromUtc, [FromQuery] DateTime? toUtc, CancellationToken ct)
+		=> Ok(await Service.GetProjectHistoryAsync(projectId, fromUtc, toUtc, ct));
 }

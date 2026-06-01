@@ -24,5 +24,5 @@ public interface IAllocationService
 	Task RemoveConnectionAsync(Guid connectionId, CancellationToken ct = default);
 
 	Task<CollaboratorAllocationHistoryDto> GetCollaboratorHistoryAsync(Guid collaboratorId, CancellationToken ct = default);
-	Task<ProjectHistoryDto> GetProjectHistoryAsync(Guid projectId, CancellationToken ct = default);
+	Task<ProjectHistoryDto> GetProjectHistoryAsync(Guid projectId, DateTime? fromUtc = null, DateTime? toUtc = null, CancellationToken ct = default);
 }

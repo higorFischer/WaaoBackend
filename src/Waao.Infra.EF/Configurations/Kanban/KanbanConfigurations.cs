@@ -22,6 +22,13 @@ public class BoardConfiguration : IEntityTypeConfiguration<Board>
 			.HasForeignKey(x => x.OwnerId)
 			.OnDelete(DeleteBehavior.Restrict);
 
+		builder.HasOne(x => x.Project)
+			.WithMany()
+			.HasForeignKey(x => x.ProjectId)
+			.OnDelete(DeleteBehavior.SetNull);
+
+		builder.HasIndex(x => x.ProjectId);
+
 		builder.HasQueryFilter(x => !x.IsDeleted);
 	}
 }

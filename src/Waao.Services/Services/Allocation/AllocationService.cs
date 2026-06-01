@@ -474,7 +474,7 @@ public sealed class AllocationService(
 		};
 	}
 
-	public async Task<ProjectHistoryDto> GetProjectHistoryAsync(Guid projectId, CancellationToken ct = default)
+	public async Task<ProjectHistoryDto> GetProjectHistoryAsync(Guid projectId, DateTime? fromUtc = null, DateTime? toUtc = null, CancellationToken ct = default)
 	{
 		var events = await Db.ProjectAllocationEvents
 			.AsNoTracking()

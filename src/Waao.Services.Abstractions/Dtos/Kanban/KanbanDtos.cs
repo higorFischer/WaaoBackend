@@ -16,6 +16,9 @@ public record BoardSummaryDto
 	public int CardCount { get; init; }
 	public int MemberCount { get; init; }
 	public bool IsArchived { get; init; }
+	public Guid? ProjectId { get; init; }
+	public string? ProjectTitle { get; init; }
+	public string? ProjectColorHex { get; init; }
 }
 
 public record BoardDetailDto
@@ -29,6 +32,9 @@ public record BoardDetailDto
 	public int? MinSeniorityOrder { get; init; }
 	public Guid OwnerId { get; init; }
 	public bool IsArchived { get; init; }
+	public Guid? ProjectId { get; init; }
+	public string? ProjectTitle { get; init; }
+	public string? ProjectColorHex { get; init; }
 
 	public IReadOnlyList<BoardColumnDto> Columns { get; init; } = [];
 	public IReadOnlyList<EpicDto> Epics { get; init; } = [];
@@ -177,6 +183,7 @@ public record CreateBoardDto
 	public BoardVisibility Visibility { get; init; } = BoardVisibility.Team;
 	public int? MinSeniorityOrder { get; init; }
 	public bool SeedDefaultColumns { get; init; } = true;
+	public Guid? ProjectId { get; init; }
 }
 
 public record UpdateBoardDto
@@ -186,6 +193,7 @@ public record UpdateBoardDto
 	public string ColorHex { get; init; } = "#2A6B7E";
 	public BoardVisibility Visibility { get; init; }
 	public int? MinSeniorityOrder { get; init; }
+	public Guid? ProjectId { get; init; }
 	public bool IsArchived { get; init; }
 }
 

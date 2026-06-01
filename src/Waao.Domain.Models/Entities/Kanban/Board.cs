@@ -1,3 +1,4 @@
+using Waao.Domain.Models.Entities.Allocation;
 using Waao.Domain.Models.Enums;
 
 namespace Waao.Domain.Models.Entities.Kanban;
@@ -10,6 +11,10 @@ public class Board : Entity
 	public string ColorHex { get; set; } = "#2A6B7E";
 
 	public BoardVisibility Visibility { get; set; } = BoardVisibility.Team;
+
+	/// <summary>Optional link to an allocation Project for cross-page filtering and discovery.</summary>
+	public Guid? ProjectId { get; set; }
+	public virtual Project? Project { get; set; }
 
 	/// <summary>
 	/// When set, the board is also visible to any collaborator whose Role.SeniorityOrder >= this value,

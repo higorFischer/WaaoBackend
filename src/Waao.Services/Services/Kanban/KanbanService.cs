@@ -74,6 +74,7 @@ public sealed class KanbanService(
 		var boards = await Db.Boards
 			.Include(b => b.Owner)
 			.Include(b => b.Members)
+			.Include(b => b.Project)
 			.Where(b => !b.IsArchived && (
 				isAdmin ||
 				b.Visibility == BoardVisibility.Public ||
@@ -97,6 +98,9 @@ public sealed class KanbanService(
 			CardCount = counts.GetValueOrDefault(b.Id, 0),
 			MemberCount = b.Members.Count,
 			IsArchived = b.IsArchived,
+			ProjectId = b.ProjectId,
+			ProjectTitle = b.Project?.Title,
+			ProjectColorHex = b.Project?.ColorHex,
 		}).ToList();
 	}
 
@@ -107,6 +111,7 @@ public sealed class KanbanService(
 			.Include(b => b.Columns)
 			.Include(b => b.Epics)
 			.Include(b => b.Labels)
+			.Include(b => b.Project)
 			.FirstOrDefaultAsync(b => b.Slug == slug, ct);
 		if (board is null) return null;
 		var collaborator = await Db.Collaborators.Include(c => c.Role).FirstOrDefaultAsync(c => c.Id == currentCollaboratorId, ct);
@@ -132,6 +137,9 @@ public sealed class KanbanService(
 			Id = board.Id, Slug = board.Slug, Title = board.Title, Description = board.Description,
 			ColorHex = board.ColorHex, Visibility = board.Visibility, MinSeniorityOrder = board.MinSeniorityOrder,
 			OwnerId = board.OwnerId, IsArchived = board.IsArchived,
+			ProjectId = board.ProjectId,
+			ProjectTitle = board.Project?.Title,
+			ProjectColorHex = board.Project?.ColorHex,
 			Members = board.Members.Select(m => new BoardMemberDto
 			{
 				Id = m.Id, CollaboratorId = m.CollaboratorId, FullName = m.Collaborator.FullName,
@@ -164,6 +172,7 @@ public sealed class KanbanService(
 			Id = Guid.CreateVersion7(),
 			Slug = dto.Slug, Title = dto.Title, Description = dto.Description,
 			ColorHex = dto.ColorHex, Visibility = dto.Visibility, MinSeniorityOrder = dto.MinSeniorityOrder,
+			ProjectId = dto.ProjectId,
 			OwnerId = currentCollaboratorId,
 		};
 		Db.Boards.Add(board);
@@ -192,6 +201,7 @@ public sealed class KanbanService(
 			Id = board.Id, Slug = board.Slug, Title = board.Title, Description = board.Description,
 			ColorHex = board.ColorHex, Visibility = board.Visibility, MinSeniorityOrder = board.MinSeniorityOrder,
 			OwnerId = board.OwnerId, CardCount = 0, MemberCount = 1, IsArchived = false,
+			ProjectId = board.ProjectId,
 		};
 	}
 
@@ -204,6 +214,7 @@ public sealed class KanbanService(
 		board.ColorHex = dto.ColorHex;
 		board.Visibility = dto.Visibility;
 		board.MinSeniorityOrder = dto.MinSeniorityOrder;
+		board.ProjectId = dto.ProjectId;
 		board.IsArchived = dto.IsArchived;
 		board.UpdatedAt = DateTime.UtcNow;
 		await Db.SaveChangesAsync(ct);
@@ -212,6 +223,7 @@ public sealed class KanbanService(
 			Id = board.Id, Slug = board.Slug, Title = board.Title, Description = board.Description,
 			ColorHex = board.ColorHex, Visibility = board.Visibility, MinSeniorityOrder = board.MinSeniorityOrder,
 			OwnerId = board.OwnerId, IsArchived = board.IsArchived,
+			ProjectId = board.ProjectId,
 		};
 	}
 
