@@ -118,6 +118,9 @@ builder.Services.AddScoped<ITimeOffService, Waao.Services.Services.TimeOff.TimeO
 // Kudos
 builder.Services.AddScoped<IKudosService, Waao.Services.Services.Kudos.KudosService>();
 
+// Weekly Focus (admin-curated)
+builder.Services.AddScoped<IWeeklyFocusService, Waao.Services.Services.Focus.WeeklyFocusService>();
+
 // Badge admin (manual flair badges)
 builder.Services.AddScoped<IBadgeAdminService, Waao.Services.Services.Badges.BadgeAdminService>();
 

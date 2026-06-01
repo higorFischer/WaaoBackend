@@ -7,6 +7,7 @@ using Waao.Domain.Models.Entities.Kanban;
 using Waao.Domain.Models.Entities.Meetings;
 using Waao.Domain.Models.Entities.Messaging;
 using Waao.Domain.Models.Entities.Notifications;
+using Waao.Domain.Models.Entities.Focus;
 using Waao.Domain.Models.Entities.Kudos;
 using Waao.Domain.Models.Entities.TimeOff;
 
@@ -85,6 +86,11 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 	// Kudos
 	public DbSet<Kudo> Kudos => Set<Kudo>();
 	public DbSet<KudoRecipient> KudoRecipients => Set<KudoRecipient>();
+
+	// Weekly Focus (admin-curated)
+	public DbSet<WeeklyFocus> WeeklyFocuses => Set<WeeklyFocus>();
+	public DbSet<WeeklyFocusGoal> WeeklyFocusGoals => Set<WeeklyFocusGoal>();
+	public DbSet<WeeklyFocusProject> WeeklyFocusProjects => Set<WeeklyFocusProject>();
 
 	// Internal feedback ("what's happening inside the company")
 	public DbSet<Waao.Domain.Models.Entities.Feedback.Feedback> Feedback => Set<Waao.Domain.Models.Entities.Feedback.Feedback>();
