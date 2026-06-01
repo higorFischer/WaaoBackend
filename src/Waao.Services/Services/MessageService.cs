@@ -95,11 +95,44 @@ public sealed class MessageService(
 			.GroupBy(mm => mm.MessageId)
 			.ToDictionary(g => g.Key, g => g.ToList());
 
+		var reactionsByMessage = await LoadReactionsAsync(messageIds, callerId, ct);
+
 		return new MessagePageDto
 		{
-			Messages = messages.Select(m => MapToDto(m, mentionsByMessage.GetValueOrDefault(m.Id))).ToList(),
+			Messages = messages.Select(m => MapToDto(m, mentionsByMessage.GetValueOrDefault(m.Id), reactionsByMessage.GetValueOrDefault(m.Id))).ToList(),
 			HasMore = hasMore,
 		};
+	}
+
+	/// <summary>
+	/// Buckets every reaction by message → emoji, returning a dictionary the mapper can index by
+	/// message id. The "Mine" flag is computed against <paramref name="callerId"/> so each user
+	/// sees their own toggles highlighted.
+	/// </summary>
+	private async Task<Dictionary<Guid, List<MessageReactionGroupDto>>> LoadReactionsAsync(
+		IReadOnlyList<Guid> messageIds, Guid callerId, CancellationToken ct)
+	{
+		if (messageIds.Count == 0) return new();
+
+		var rows = await Db.MessageReactions
+			.AsNoTracking()
+			.Where(r => messageIds.Contains(r.MessageId))
+			.Select(r => new { r.MessageId, r.Emoji, r.CollaboratorId })
+			.ToListAsync(ct);
+
+		return rows
+			.GroupBy(r => r.MessageId)
+			.ToDictionary(
+				g => g.Key,
+				g => g.GroupBy(r => r.Emoji)
+					.OrderBy(eg => eg.Key, StringComparer.Ordinal)
+					.Select(eg => new MessageReactionGroupDto
+					{
+						Emoji = eg.Key,
+						Count = eg.Count(),
+						Mine = eg.Any(r => r.CollaboratorId == callerId),
+						CollaboratorIds = eg.Select(r => r.CollaboratorId).ToList(),
+					}).ToList());
 	}
 
 	// =====================================================================
@@ -336,7 +369,10 @@ public sealed class MessageService(
 			.Where(mm => mm.MessageId == messageId)
 			.ToListAsync(ct);
 
-		return MapToDto(message, mentions);
+		// Preserve existing reactions across edits — UI would otherwise lose them when
+		// the broadcasted edited DTO replaces the cached message.
+		var reactions = await LoadReactionsAsync([messageId], callerId, ct);
+		return MapToDto(message, mentions, reactions.GetValueOrDefault(messageId));
 	}
 
 	// =====================================================================
@@ -387,7 +423,7 @@ public sealed class MessageService(
 		}).ToList();
 	}
 
-	private MessageDto MapToDto(Message m, List<MessageMention>? mentions) => new()
+	private MessageDto MapToDto(Message m, List<MessageMention>? mentions, List<MessageReactionGroupDto>? reactions = null) => new()
 	{
 		Id = m.Id,
 		ChannelId = m.ChannelId,
@@ -415,5 +451,53 @@ public sealed class MessageService(
 			Id = a.Id, Kind = a.Kind, Url = ResolveAttachmentUrl(a), Mime = a.Mime,
 			OriginalName = a.OriginalName, SizeBytes = a.SizeBytes, DurationSeconds = a.DurationSeconds,
 		}).ToList() ?? [],
+		Reactions = reactions ?? [],
 	};
+
+	public async Task<MessageReactionUpdatedDto> ToggleReactionAsync(Guid messageId, string emoji, Guid callerId, CancellationToken ct = default)
+	{
+		var normalized = (emoji ?? string.Empty).Trim();
+		if (normalized.Length == 0) throw new ArgumentException("Emoji is required.", nameof(emoji));
+		if (normalized.Length > 32) throw new ArgumentException("Emoji is too long.", nameof(emoji));
+
+		var message = await Db.Messages.AsNoTracking()
+			.Where(m => m.Id == messageId)
+			.Select(m => new { m.Id, m.ChannelId })
+			.FirstOrDefaultAsync(ct)
+			?? throw new KeyNotFoundException($"Message {messageId} not found.");
+
+		// Caller must be a member of the channel to react.
+		var isMember = await Db.ChannelMembers
+			.AnyAsync(cm => cm.ChannelId == message.ChannelId && cm.CollaboratorId == callerId, ct);
+		if (!isMember) throw new UnauthorizedAccessException("You are not a member of that channel.");
+
+		var existing = await Db.MessageReactions
+			.FirstOrDefaultAsync(r => r.MessageId == messageId && r.CollaboratorId == callerId && r.Emoji == normalized, ct);
+
+		if (existing is null)
+		{
+			Db.MessageReactions.Add(new MessageReaction
+			{
+				Id = Guid.CreateVersion7(),
+				MessageId = messageId,
+				CollaboratorId = callerId,
+				Emoji = normalized,
+			});
+		}
+		else
+		{
+			existing.IsDeleted = true;
+			existing.DeletedAt = DateTime.UtcNow;
+			existing.UpdatedAt = DateTime.UtcNow;
+		}
+		await Db.SaveChangesAsync(ct);
+
+		var reactionsByMessage = await LoadReactionsAsync([messageId], callerId, ct);
+		return new MessageReactionUpdatedDto
+		{
+			ChannelId = message.ChannelId,
+			MessageId = messageId,
+			Reactions = reactionsByMessage.GetValueOrDefault(messageId, []),
+		};
+	}
 }

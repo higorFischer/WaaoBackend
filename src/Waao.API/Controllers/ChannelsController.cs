@@ -154,6 +154,23 @@ public class ChannelsController(
 		return Ok(message);
 	}
 
+	/// <summary>
+	/// Toggles a single emoji reaction by the caller on a message (WhatsApp-style). Returns the
+	/// updated reactions summary and broadcasts <c>messageReactionUpdated</c> to the channel
+	/// group so every connected client patches the message in place.
+	/// </summary>
+	[HttpPost("{id:guid}/messages/{messageId:guid}/reactions")]
+	[ProducesResponseType(typeof(MessageReactionUpdatedDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> ToggleReaction(Guid id, Guid messageId, [FromBody] ReactionTogglePayloadDto dto, CancellationToken ct)
+	{
+		var result = await MessageService.ToggleReactionAsync(messageId, dto.Emoji, Me, ct);
+		await Hub.Clients.Group(MessagingHub.GroupName(id)).SendAsync("messageReactionUpdated", result, ct);
+		return Ok(result);
+	}
+
 	[HttpPost("{id:guid}/attachments")]
 	[ProducesResponseType(typeof(UploadedAttachmentDto), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]

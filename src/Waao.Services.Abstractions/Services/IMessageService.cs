@@ -25,4 +25,11 @@ public interface IMessageService
 	/// Capped at 25 messages. Used by the dashboard "what's happening" feed.
 	/// </summary>
 	Task<IReadOnlyList<RecentMessageDto>> GetRecentAcrossMyChannelsAsync(Guid callerId, int limit, CancellationToken ct = default);
+
+	/// <summary>
+	/// Adds the emoji reaction if the caller hasn't reacted with it yet, otherwise removes it
+	/// (toggle). Returns the updated reaction summary for the message + the channelId so the
+	/// controller can broadcast to the channel group.
+	/// </summary>
+	Task<MessageReactionUpdatedDto> ToggleReactionAsync(Guid messageId, string emoji, Guid callerId, CancellationToken ct = default);
 }

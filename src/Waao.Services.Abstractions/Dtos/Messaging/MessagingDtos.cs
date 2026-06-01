@@ -68,6 +68,29 @@ public record MessageDto
 	public ParentMessagePreviewDto? ParentPreview { get; init; }
 	public IReadOnlyList<MessageMentionDto> Mentions { get; init; } = [];
 	public IReadOnlyList<MessageAttachmentDto> Attachments { get; init; } = [];
+	public IReadOnlyList<MessageReactionGroupDto> Reactions { get; init; } = [];
+}
+
+/// <summary>One emoji bucket on a message: who reacted with it, count, and whether the caller is one of them.</summary>
+public record MessageReactionGroupDto
+{
+	public string Emoji { get; init; } = string.Empty;
+	public int Count { get; init; }
+	public bool Mine { get; init; }
+	public IReadOnlyList<Guid> CollaboratorIds { get; init; } = [];
+}
+
+public record ReactionTogglePayloadDto
+{
+	public string Emoji { get; init; } = string.Empty;
+}
+
+/// <summary>Pushed to channel group when reactions on a message change.</summary>
+public record MessageReactionUpdatedDto
+{
+	public Guid ChannelId { get; init; }
+	public Guid MessageId { get; init; }
+	public IReadOnlyList<MessageReactionGroupDto> Reactions { get; init; } = [];
 }
 
 public record RecentMessageDto : MessageDto

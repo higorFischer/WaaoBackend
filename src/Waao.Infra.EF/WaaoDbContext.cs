@@ -136,6 +136,9 @@ public class WaaoDbContext : DbContext
 	// Messaging — attachments
 	public DbSet<Waao.Domain.Models.Entities.Messaging.MessageAttachment> MessageAttachments => Set<Waao.Domain.Models.Entities.Messaging.MessageAttachment>();
 
+	// Messaging — emoji reactions (WhatsApp-style)
+	public DbSet<Waao.Domain.Models.Entities.Messaging.MessageReaction> MessageReactions => Set<Waao.Domain.Models.Entities.Messaging.MessageReaction>();
+
 	// Multi-tenancy boundary.
 	public DbSet<Tenant> Tenants => Set<Tenant>();
 
