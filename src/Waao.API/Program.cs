@@ -81,11 +81,16 @@ builder.Services.AddAuthorization(options =>
 	// SuperAdmin = the single platform owner identified by email. Used for
 	// cross-tenant operations (creating workspaces, joining empty tenants).
 	// Source of truth lives in AdminService.SuperAdminEmail; the policy mirrors it.
+	//
+	// ClaimTypes.Email is the long URI form — JwtBearer's default MapInboundClaims
+	// remaps the short "email" JWT claim into it, so this is the claim type the
+	// principal actually carries at policy-evaluation time.
 	options.AddPolicy("SuperAdmin",   p => p.RequireAssertion(ctx =>
-		string.Equals(
-			ctx.User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Email),
-			Waao.Services.Services.AdminService.SuperAdminEmail,
-			StringComparison.OrdinalIgnoreCase)));
+	{
+		var email = ctx.User.FindFirstValue(ClaimTypes.Email)
+			?? ctx.User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Email);
+		return string.Equals(email, Waao.Services.Services.AdminService.SuperAdminEmail, StringComparison.OrdinalIgnoreCase);
+	}));
 	// Default fallback: every endpoint requires auth unless [AllowAnonymous]
 	options.FallbackPolicy = new AuthorizationPolicyBuilder()
 		.RequireAuthenticatedUser()
