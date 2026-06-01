@@ -1,5 +1,8 @@
+using System.Linq.Expressions;
+using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Waao.Domain.Models.Entities;
+using Waao.Services.Abstractions.Services;
 using Waao.Domain.Models.Entities.Allocation;
 using Waao.Domain.Models.Entities.Calendar;
 using Waao.Domain.Models.Entities.FeatureRequests;
@@ -16,8 +19,26 @@ using Waao.Domain.Models.Entities.TimeOff;
 
 namespace Waao.Infra.EF;
 
-public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(Options)
+public class WaaoDbContext : DbContext
 {
+	// Captured at construction; EF re-reads this field per query via the expression
+	// tree we build in OnModelCreating, so the filter always uses the LIVE tenant
+	// for the current request scope.
+	private readonly ITenantContext? _tenantContext;
+
+	public WaaoDbContext(DbContextOptions<WaaoDbContext> options) : base(options) { }
+	public WaaoDbContext(DbContextOptions<WaaoDbContext> options, ITenantContext tenantContext) : base(options)
+	{
+		_tenantContext = tenantContext;
+	}
+
+	/// <summary>
+	/// Exposed so the query-filter expression can reference it. Returns null when
+	/// no tenant context was injected (design-time tooling, migrations) — the
+	/// filter then short-circuits to 'no filter' so EF tooling keeps working.
+	/// </summary>
+	public Guid? CurrentTenantId => _tenantContext?.CurrentTenantId;
+
 	public DbSet<Collaborator> Collaborators => Set<Collaborator>();
 	public DbSet<Department> Departments => Set<Department>();
 	public DbSet<Role> Roles => Set<Role>();
@@ -123,11 +144,7 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 		base.OnModelCreating(modelBuilder);
 		modelBuilder.ApplyConfigurationsFromAssembly(typeof(WaaoDbContext).Assembly);
 
-		// --- Multi-tenancy: add a shadow 'TenantId' (uuid, nullable in Phase 1) to every
-		// entity except Tenant itself. Shadow properties keep this zero-touch on the domain
-		// model — entity classes don't need to know about TenantId. Nullable for now so the
-		// initial migration can backfill existing rows safely; later phases will tighten
-		// to NOT NULL and turn on the global query filter.
+		// --- Multi-tenancy: shadow TenantId on every tenant-scoped entity + global query filter.
 		foreach (var entityType in modelBuilder.Model.GetEntityTypes())
 		{
 			if (entityType.ClrType == typeof(Tenant)) continue;
@@ -136,12 +153,62 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 			var tenantIdProp = entityType.FindProperty("TenantId");
 			if (tenantIdProp is null)
 			{
-				modelBuilder.Entity(entityType.ClrType)
-					.Property<Guid?>("TenantId");
+				modelBuilder.Entity(entityType.ClrType).Property<Guid?>("TenantId");
 			}
 
-			// Index so per-tenant filtering stays fast once the query filter turns on.
+			// Index so per-tenant filtering stays fast under the query filter.
 			modelBuilder.Entity(entityType.ClrType).HasIndex("TenantId");
+
+			// Phase 3: combine any existing query filter (e.g. !IsDeleted) with a tenant
+			// check. Reflection-into-generic-helper because the loop variable isn't a type param.
+			ApplyTenantFilterMethod
+				.MakeGenericMethod(entityType.ClrType)
+				.Invoke(this, [modelBuilder]);
 		}
+	}
+
+	private static readonly MethodInfo ApplyTenantFilterMethod = typeof(WaaoDbContext)
+		.GetMethod(nameof(ApplyTenantFilter), BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+	/// <summary>
+	/// Combines whatever query filter the entity's configuration already declared (typically
+	/// soft-delete: <c>x => !x.IsDeleted</c>) with the tenant predicate.
+	///
+	/// Written as a real C# lambda so EF Core rewrites <c>CurrentTenantId</c> into a
+	/// per-query DbContext parameter. Manual <c>Expression.Constant(this)</c> here would
+	/// freeze the first instance — OnModelCreating runs once per DbContext type and the
+	/// resulting model is cached, so a captured-instance constant breaks every later request.
+	///
+	/// The <c>== null</c> short-circuit is intentional: when no tenant is resolved (background
+	/// services that haven't called <see cref="ITenantContext.SetTenant"/>, design-time
+	/// tooling, EF migrations bootstrap), reads are NOT filtered. Production HTTP traffic
+	/// always lands here with a tenant set by <c>TenantResolutionMiddleware</c>.
+	/// </summary>
+	private void ApplyTenantFilter<TEntity>(ModelBuilder modelBuilder) where TEntity : class
+	{
+		var entityBuilder = modelBuilder.Entity<TEntity>();
+		var existing = entityBuilder.Metadata.GetQueryFilter();
+
+		Expression<Func<TEntity, bool>> tenantPredicate = e =>
+			CurrentTenantId == null ||
+			Microsoft.EntityFrameworkCore.EF.Property<Guid?>(e, "TenantId") == CurrentTenantId;
+
+		if (existing is null)
+		{
+			entityBuilder.HasQueryFilter(tenantPredicate);
+			return;
+		}
+
+		var param = tenantPredicate.Parameters[0];
+		var reboundExisting = new ParameterReplacer(existing.Parameters[0], param).Visit(existing.Body)!;
+		var combinedBody = Expression.AndAlso(reboundExisting, tenantPredicate.Body);
+		var combined = Expression.Lambda<Func<TEntity, bool>>(combinedBody, param);
+		entityBuilder.HasQueryFilter(combined);
+	}
+
+	private sealed class ParameterReplacer(ParameterExpression from, ParameterExpression to) : ExpressionVisitor
+	{
+		protected override Expression VisitParameter(ParameterExpression node)
+			=> node == from ? to : base.VisitParameter(node);
 	}
 }
