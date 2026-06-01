@@ -96,6 +96,27 @@ public record CardSummaryDto
 	public IReadOnlyList<CardLabelDto> Labels { get; init; } = [];
 }
 
+public record MyKanbanCardDto
+{
+	public Guid Id { get; init; }
+	public string Title { get; init; } = string.Empty;
+	public CardPriority Priority { get; init; }
+	public Guid BoardId { get; init; }
+	public string BoardTitle { get; init; } = string.Empty;
+	public string BoardSlug { get; init; } = string.Empty;
+	public Guid ColumnId { get; init; }
+	public string ColumnTitle { get; init; } = string.Empty;
+	public string ColumnColorHex { get; init; } = "#94a3b8";
+	public bool IsDoneColumn { get; init; }
+	public Guid? EpicId { get; init; }
+	public string? EpicTitle { get; init; }
+	public string? EpicColorHex { get; init; }
+	public DateOnly? DueDate { get; init; }
+	public int? StoryPoints { get; init; }
+	public int ChecklistDone { get; init; }
+	public int ChecklistTotal { get; init; }
+}
+
 public record CardDetailDto : CardSummaryDto
 {
 	public string? Description { get; init; }

@@ -4,6 +4,7 @@ namespace Waao.Services.Abstractions.Services;
 
 public interface IKanbanService
 {
+	Task<IReadOnlyList<MyKanbanCardDto>> ListMyCardsAsync(Guid currentCollaboratorId, CancellationToken ct = default);
 	Task<IReadOnlyList<BoardSummaryDto>> ListBoardsAsync(Guid currentCollaboratorId, CancellationToken ct = default);
 	Task<BoardDetailDto?> GetBoardAsync(string slug, Guid currentCollaboratorId, CancellationToken ct = default);
 	Task<BoardSummaryDto> CreateBoardAsync(CreateBoardDto dto, Guid currentCollaboratorId, CancellationToken ct = default);

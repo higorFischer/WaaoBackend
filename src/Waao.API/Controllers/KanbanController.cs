@@ -14,6 +14,11 @@ public class KanbanController(IKanbanService Service) : ControllerBase
 	private Guid Me => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
 		? id : throw new UnauthorizedAccessException("Missing subject claim.");
 
+	// ----- CARDS ASSIGNED TO ME -----
+	[HttpGet("cards/mine")]
+	public async Task<IActionResult> ListMyCards(CancellationToken ct)
+		=> Ok(await Service.ListMyCardsAsync(Me, ct));
+
 	// ----- BOARDS -----
 	[HttpGet("boards")]
 	public async Task<IActionResult> ListBoards(CancellationToken ct)

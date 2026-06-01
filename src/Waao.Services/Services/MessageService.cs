@@ -347,6 +347,42 @@ public sealed class MessageService(
 		return plain.Length > 120 ? plain[..120] + "…" : plain;
 	}
 
+	public async Task<IReadOnlyList<RecentMessageDto>> GetRecentAcrossMyChannelsAsync(Guid callerId, int limit, CancellationToken ct = default)
+	{
+		var effectiveLimit = Math.Clamp(limit, 1, 25);
+
+		var myChannelIds = await Db.ChannelMembers
+			.AsNoTracking()
+			.Where(m => m.CollaboratorId == callerId)
+			.Select(m => m.ChannelId)
+			.ToListAsync(ct);
+
+		if (myChannelIds.Count == 0) return [];
+
+		var messages = await Db.Messages
+			.AsNoTracking()
+			.Include(m => m.Author)
+			.Include(m => m.Channel)
+			.Where(m => myChannelIds.Contains(m.ChannelId))
+			.OrderByDescending(m => m.CreatedAt)
+			.Take(effectiveLimit)
+			.ToListAsync(ct);
+
+		return messages.Select(m => new RecentMessageDto
+		{
+			Id = m.Id,
+			ChannelId = m.ChannelId,
+			ChannelName = m.Channel.Name,
+			ChannelKind = m.Channel.Kind,
+			AuthorId = m.AuthorId,
+			AuthorName = m.Author.FullName,
+			AuthorPhotoUrl = m.Author.PhotoUrl,
+			Body = MentionParser.ToPlainText(Protector.Unprotect(m.Body) ?? string.Empty),
+			CreatedAtUtc = m.CreatedAt,
+			EditedAtUtc = m.EditedAtUtc,
+		}).ToList();
+	}
+
 	private MessageDto MapToDto(Message m, List<MessageMention>? mentions) => new()
 	{
 		Id = m.Id,

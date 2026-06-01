@@ -70,6 +70,12 @@ public record MessageDto
 	public IReadOnlyList<MessageAttachmentDto> Attachments { get; init; } = [];
 }
 
+public record RecentMessageDto : MessageDto
+{
+	public string ChannelName { get; init; } = string.Empty;
+	public ChannelKind ChannelKind { get; init; }
+}
+
 public record ParentMessagePreviewDto
 {
 	public Guid Id { get; init; }

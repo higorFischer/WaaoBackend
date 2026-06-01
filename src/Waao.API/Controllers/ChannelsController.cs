@@ -35,6 +35,11 @@ public class ChannelsController(
 	public async Task<IActionResult> GetPublic(CancellationToken ct)
 		=> Ok(await ChannelService.ListPublicChannelsAsync(Me, ct));
 
+	[HttpGet("messages/recent")]
+	[ProducesResponseType(typeof(IReadOnlyList<RecentMessageDto>), StatusCodes.Status200OK)]
+	public async Task<IActionResult> GetRecentAcrossMyChannels([FromQuery] int limit = 10, CancellationToken ct = default)
+		=> Ok(await MessageService.GetRecentAcrossMyChannelsAsync(Me, limit, ct));
+
 	[HttpPost("")]
 	[ProducesResponseType(typeof(ChannelDto), StatusCodes.Status201Created)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]

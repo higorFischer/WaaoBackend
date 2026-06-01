@@ -19,4 +19,10 @@ public interface IMessageService
 
 	/// <summary>Edits a message. Only the original author may edit; soft-deleted messages cannot be edited.</summary>
 	Task<MessageDto> EditMessageAsync(Guid channelId, Guid messageId, EditMessageDto dto, Guid callerId, CancellationToken ct = default);
+
+	/// <summary>
+	/// Returns the most recent messages across every channel the caller is a member of, newest-first.
+	/// Capped at 25 messages. Used by the dashboard "what's happening" feed.
+	/// </summary>
+	Task<IReadOnlyList<RecentMessageDto>> GetRecentAcrossMyChannelsAsync(Guid callerId, int limit, CancellationToken ct = default);
 }

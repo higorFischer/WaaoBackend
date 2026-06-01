@@ -22,6 +22,44 @@ public sealed class KanbanService(
 	// BOARDS
 	// =====================================================================
 
+	public async Task<IReadOnlyList<MyKanbanCardDto>> ListMyCardsAsync(Guid currentCollaboratorId, CancellationToken ct = default)
+	{
+		var rows = await Db.Cards
+			.AsNoTracking()
+			.Include(c => c.Column).ThenInclude(col => col.Board)
+			.Include(c => c.Epic)
+			.Include(c => c.Checklists).ThenInclude(cl => cl.Items)
+			.Where(c => c.AssigneeId == currentCollaboratorId && !c.IsArchived)
+			.ToListAsync(ct);
+
+		return rows
+			.OrderBy(c => c.Column.IsDone)              // not-done first
+			.ThenBy(c => c.DueDate ?? DateOnly.MaxValue) // earliest due first, no-due last
+			.ThenByDescending(c => c.Priority)
+			.ThenBy(c => c.Rank)
+			.Select(c => new MyKanbanCardDto
+			{
+				Id = c.Id,
+				Title = c.Title,
+				Priority = c.Priority,
+				BoardId = c.Column.BoardId,
+				BoardTitle = c.Column.Board.Title,
+				BoardSlug = c.Column.Board.Slug,
+				ColumnId = c.ColumnId,
+				ColumnTitle = c.Column.Title,
+				ColumnColorHex = c.Column.ColorHex ?? "#94a3b8",
+				IsDoneColumn = c.Column.IsDone,
+				EpicId = c.EpicId,
+				EpicTitle = c.Epic?.Title,
+				EpicColorHex = c.Epic?.ColorHex,
+				DueDate = c.DueDate,
+				StoryPoints = c.StoryPoints,
+				ChecklistDone = c.Checklists.SelectMany(cl => cl.Items).Count(i => i.Done),
+				ChecklistTotal = c.Checklists.SelectMany(cl => cl.Items).Count(),
+			})
+			.ToList();
+	}
+
 	public async Task<IReadOnlyList<BoardSummaryDto>> ListBoardsAsync(Guid currentCollaboratorId, CancellationToken ct = default)
 	{
 		var collaborator = await Db.Collaborators
