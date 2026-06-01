@@ -28,4 +28,11 @@ public interface ITenantService
 
 	/// <summary>Updates display fields on an existing tenant. Slug edits revalidate uniqueness.</summary>
 	Task<TenantDto> UpdateAsync(Guid tenantId, UpdateTenantDto dto, CancellationToken ct = default);
+
+	/// <summary>
+	/// Mirrors the calling admin into an existing tenant they don't yet belong to. No-op if a
+	/// mirror already exists. Used to bootstrap empty tenants (e.g. seeded Liberty) so an admin
+	/// can step into them via the sidebar switcher.
+	/// </summary>
+	Task<AuthResultDto> JoinAsync(Guid currentCollaboratorId, Guid targetTenantId, CancellationToken ct = default);
 }

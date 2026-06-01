@@ -136,6 +136,58 @@ public sealed class TenantService(
 		return ToDto(tenant);
 	}
 
+	public async Task<AuthResultDto> JoinAsync(Guid currentCollaboratorId, Guid targetTenantId, CancellationToken ct = default)
+	{
+		var current = await Db.Collaborators
+			.IgnoreQueryFilters()
+			.AsNoTracking()
+			.FirstOrDefaultAsync(c => c.Id == currentCollaboratorId && !c.IsDeleted, ct)
+			?? throw new UnauthorizedAccessException("Unknown collaborator.");
+
+		var tenant = await Db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == targetTenantId, ct)
+			?? throw new KeyNotFoundException($"Tenant {targetTenantId} not found.");
+
+		// If a mirror already exists, just return a fresh JWT for it — idempotent join.
+		var existing = await Db.Collaborators
+			.IgnoreQueryFilters()
+			.Include(c => c.Department).Include(c => c.Role).Include(c => c.Manager).Include(c => c.Badges)
+			.FirstOrDefaultAsync(c => c.Email == current.Email && c.TenantId == targetTenantId && !c.IsDeleted, ct);
+
+		Domain.Models.Entities.Collaborator mirror;
+		if (existing is not null)
+		{
+			mirror = existing;
+		}
+		else
+		{
+			mirror = new Domain.Models.Entities.Collaborator
+			{
+				Id = Guid.CreateVersion7(),
+				TenantId = targetTenantId,
+				FullName = current.FullName,
+				Email = current.Email,
+				JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
+				RoleKind = Domain.Models.Enums.CollaboratorRoleKind.Admin,
+				PasswordHash = current.PasswordHash,
+				EmailVerified = true,
+				EmailVerifiedAt = DateTime.UtcNow,
+				Status = Domain.Models.Enums.CollaboratorStatus.Active,
+				PhotoUrl = current.PhotoUrl,
+			};
+			Db.Collaborators.Add(mirror);
+			await Db.SaveChangesAsync(ct);
+			Logger.LogInformation("Admin {Email} joined tenant {TenantId} ({Slug}); mirror {MirrorId}.", current.Email, targetTenantId, tenant.Slug, mirror.Id);
+		}
+
+		var (token, expires) = Jwt.Issue(mirror);
+		return new AuthResultDto
+		{
+			Token = token,
+			ExpiresAt = expires,
+			Me = MapCollaborator(mirror),
+		};
+	}
+
 	public async Task<TenantDto> UpdateAsync(Guid tenantId, UpdateTenantDto dto, CancellationToken ct = default)
 	{
 		var name = (dto.Name ?? string.Empty).Trim();

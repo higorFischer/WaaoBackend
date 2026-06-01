@@ -58,4 +58,16 @@ public class TenantsController(ITenantService Service) : ControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public async Task<IActionResult> Update(Guid id, [FromBody] UpdateTenantDto dto, CancellationToken ct)
 		=> Ok(await Service.UpdateAsync(id, dto, ct));
+
+	/// <summary>
+	/// Mirror the calling admin into an existing tenant they don't yet belong to and return a
+	/// JWT scoped to that tenant. Idempotent — re-joining an already-joined tenant just
+	/// re-issues the token. Used to bootstrap empty tenants from the admin UI.
+	/// </summary>
+	[HttpPost("{id:guid}/join")]
+	[Authorize(Policy = "Admin")]
+	[ProducesResponseType(typeof(AuthResultDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> Join(Guid id, CancellationToken ct)
+		=> Ok(await Service.JoinAsync(Me, id, ct));
 }
