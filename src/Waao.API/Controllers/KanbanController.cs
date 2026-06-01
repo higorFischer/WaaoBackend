@@ -19,6 +19,10 @@ public class KanbanController(IKanbanService Service) : ControllerBase
 	public async Task<IActionResult> ListMyCards(CancellationToken ct)
 		=> Ok(await Service.ListMyCardsAsync(Me, ct));
 
+	[HttpGet("cards/by-collaborator/{collaboratorId:guid}")]
+	public async Task<IActionResult> ListCardsByCollaborator(Guid collaboratorId, CancellationToken ct)
+		=> Ok(await Service.ListCardsByCollaboratorAsync(collaboratorId, ct));
+
 	// ----- BOARDS -----
 	[HttpGet("boards")]
 	public async Task<IActionResult> ListBoards(CancellationToken ct)

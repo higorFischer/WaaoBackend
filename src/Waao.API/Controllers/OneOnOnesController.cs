@@ -24,6 +24,12 @@ public class OneOnOnesController(IOneOnOneService Service) : ControllerBase
 	public async Task<IActionResult> MyActionItems(CancellationToken ct)
 		=> Ok(await Service.ListMyOpenActionItemsAsync(Me, ct));
 
+	[HttpGet("by-collaborator/{collaboratorId:guid}")]
+	[Authorize(Policy = "HR")]
+	[ProducesResponseType(typeof(IReadOnlyList<OneOnOneDto>), StatusCodes.Status200OK)]
+	public async Task<IActionResult> ListForCollaborator(Guid collaboratorId, CancellationToken ct)
+		=> Ok(await Service.ListForCollaboratorAsync(collaboratorId, ct));
+
 	[HttpGet("{id:guid}")]
 	[ProducesResponseType(typeof(OneOnOneDto), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]

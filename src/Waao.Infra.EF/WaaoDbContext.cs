@@ -104,6 +104,9 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 	// Internal feedback ("what's happening inside the company")
 	public DbSet<Waao.Domain.Models.Entities.Feedback.Feedback> Feedback => Set<Waao.Domain.Models.Entities.Feedback.Feedback>();
 
+	// Peer-to-peer feedback (collaborator -> collaborator, optionally anonymous)
+	public DbSet<Waao.Domain.Models.Entities.Feedback.PeerFeedback> PeerFeedbacks => Set<Waao.Domain.Models.Entities.Feedback.PeerFeedback>();
+
 	// Messaging — attachments
 	public DbSet<Waao.Domain.Models.Entities.Messaging.MessageAttachment> MessageAttachments => Set<Waao.Domain.Models.Entities.Messaging.MessageAttachment>();
 

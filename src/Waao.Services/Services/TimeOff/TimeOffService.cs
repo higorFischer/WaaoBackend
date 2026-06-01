@@ -159,6 +159,15 @@ public sealed class TimeOffService(
 		Logger.LogInformation("Time off request {Id} cancelled by collaborator {CollaboratorId}.", id, collaboratorId);
 	}
 
+	public async Task<IReadOnlyList<TimeOffRequestDto>> ListForCollaboratorAsync(Guid collaboratorId, CancellationToken ct = default)
+	{
+		var requests = await Db.TimeOffRequests.AsNoTracking()
+			.Where(r => r.CollaboratorId == collaboratorId)
+			.OrderByDescending(r => r.StartDate)
+			.ToListAsync(ct);
+		return requests.Select(ToDto).ToList();
+	}
+
 	private const int AnnualEntitledDays = 30; // CLT default; could be per-collaborator later.
 
 	public async Task<TimeOffBalanceDto> GetBalanceAsync(Guid collaboratorId, int year, CancellationToken ct = default)

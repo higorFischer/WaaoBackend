@@ -16,4 +16,7 @@ public interface IOneOnOneService
 
 	/// <summary>Open action items assigned to me — feeds the My Inbox page.</summary>
 	Task<IReadOnlyList<OneOnOneActionItemDto>> ListMyOpenActionItemsAsync(Guid callerId, CancellationToken ct = default);
+
+	/// <summary>List 1:1s where the target collaborator is manager OR report. Admin/HR overview.</summary>
+	Task<IReadOnlyList<OneOnOneDto>> ListForCollaboratorAsync(Guid collaboratorId, CancellationToken ct = default);
 }

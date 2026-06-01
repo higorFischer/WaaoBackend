@@ -13,4 +13,5 @@ public interface ITimeOffService
 
 	Task<TimeOffBalanceDto> GetBalanceAsync(Guid collaboratorId, int year, CancellationToken ct = default);
 	Task<IReadOnlyList<TimeOffOverlapDto>> GetOverlapsAsync(DateOnly from, DateOnly to, Guid? excludeCollaboratorId, CancellationToken ct = default);
+	Task<IReadOnlyList<TimeOffRequestDto>> ListForCollaboratorAsync(Guid collaboratorId, CancellationToken ct = default);
 }

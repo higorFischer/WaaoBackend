@@ -150,6 +150,15 @@ public sealed class OneOnOneService(WaaoDbContext Db, ILogger<OneOnOneService> L
 		return ToDto(await ReloadAsync(oneOnOneId, ct));
 	}
 
+	public async Task<IReadOnlyList<OneOnOneDto>> ListForCollaboratorAsync(Guid collaboratorId, CancellationToken ct = default)
+	{
+		var rows = await Query()
+			.Where(o => o.ManagerId == collaboratorId || o.ReportId == collaboratorId)
+			.OrderByDescending(o => o.ScheduledDate)
+			.ToListAsync(ct);
+		return rows.Select(ToDto).ToList();
+	}
+
 	public async Task<IReadOnlyList<OneOnOneActionItemDto>> ListMyOpenActionItemsAsync(Guid callerId, CancellationToken ct = default)
 	{
 		var items = await Db.Set<OneOnOneActionItem>()

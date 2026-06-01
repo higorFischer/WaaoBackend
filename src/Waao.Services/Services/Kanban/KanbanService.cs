@@ -22,6 +22,9 @@ public sealed class KanbanService(
 	// BOARDS
 	// =====================================================================
 
+	public Task<IReadOnlyList<MyKanbanCardDto>> ListCardsByCollaboratorAsync(Guid collaboratorId, CancellationToken ct = default)
+		=> ListMyCardsAsync(collaboratorId, ct);
+
 	public async Task<IReadOnlyList<MyKanbanCardDto>> ListMyCardsAsync(Guid currentCollaboratorId, CancellationToken ct = default)
 	{
 		var rows = await Db.Cards

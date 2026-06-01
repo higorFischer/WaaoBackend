@@ -128,6 +128,9 @@ builder.Services.AddScoped<IOneOnOneService, Waao.Services.Services.OneOnOnes.On
 builder.Services.AddSingleton<ICallPresenceTracker, Waao.Services.Services.Calls.CallPresenceTracker>();
 builder.Services.AddScoped<ICallChannelService, Waao.Services.Services.Calls.CallChannelService>();
 
+// Peer-to-peer feedback
+builder.Services.AddScoped<IPeerFeedbackService, Waao.Services.Services.Feedback.PeerFeedbackService>();
+
 // Anniversary / birthday celebrations (daily background tick)
 builder.Services.AddHostedService<Waao.API.HostedServices.AnniversaryHostedService>();
 

@@ -64,4 +64,10 @@ public class TimeOffController(ITimeOffService Service) : ControllerBase
 	[ProducesResponseType(typeof(IReadOnlyList<TimeOffOverlapDto>), StatusCodes.Status200OK)]
 	public async Task<IActionResult> GetOverlap([FromQuery] DateOnly from, [FromQuery] DateOnly to, [FromQuery] Guid? exclude, CancellationToken ct)
 		=> Ok(await Service.GetOverlapsAsync(from, to, exclude, ct));
+
+	[HttpGet("by-collaborator/{collaboratorId:guid}")]
+	[Authorize(Policy = "HR")]
+	[ProducesResponseType(typeof(IReadOnlyList<TimeOffRequestDto>), StatusCodes.Status200OK)]
+	public async Task<IActionResult> ListForCollaborator(Guid collaboratorId, CancellationToken ct)
+		=> Ok(await Service.ListForCollaboratorAsync(collaboratorId, ct));
 }

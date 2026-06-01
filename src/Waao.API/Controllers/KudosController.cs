@@ -33,4 +33,14 @@ public class KudosController(IKudosService Service) : ControllerBase
 	[ProducesResponseType(typeof(IReadOnlyList<KudoDto>), StatusCodes.Status200OK)]
 	public async Task<IActionResult> GetGiven(CancellationToken ct)
 		=> Ok(await Service.GetGivenAsync(Me, ct));
+
+	[HttpGet("by-collaborator/{collaboratorId:guid}/received")]
+	[ProducesResponseType(typeof(IReadOnlyList<KudoDto>), StatusCodes.Status200OK)]
+	public async Task<IActionResult> GetReceivedByCollaborator(Guid collaboratorId, CancellationToken ct)
+		=> Ok(await Service.GetReceivedAsync(collaboratorId, ct));
+
+	[HttpGet("by-collaborator/{collaboratorId:guid}/given")]
+	[ProducesResponseType(typeof(IReadOnlyList<KudoDto>), StatusCodes.Status200OK)]
+	public async Task<IActionResult> GetGivenByCollaborator(Guid collaboratorId, CancellationToken ct)
+		=> Ok(await Service.GetGivenAsync(collaboratorId, ct));
 }
