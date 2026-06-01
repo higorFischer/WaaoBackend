@@ -77,6 +77,96 @@ public sealed class TenantService(
 		};
 	}
 
+	public async Task<TenantDto> CreateAsync(Guid creatorCollaboratorId, CreateTenantDto dto, CancellationToken ct = default)
+	{
+		var name = (dto.Name ?? string.Empty).Trim();
+		var slug = (dto.Slug ?? string.Empty).Trim().ToLowerInvariant();
+		var accent = string.IsNullOrWhiteSpace(dto.AccentColorHex) ? "#2A6B7E" : dto.AccentColorHex.Trim();
+		var logo = string.IsNullOrWhiteSpace(dto.LogoUrl) ? null : dto.LogoUrl.Trim();
+
+		if (name.Length == 0) throw new ArgumentException("Tenant name is required.", nameof(dto));
+		if (slug.Length == 0) throw new ArgumentException("Tenant slug is required.", nameof(dto));
+		if (slug.Length > 40) throw new ArgumentException("Slug too long (max 40 chars).", nameof(dto));
+		if (!System.Text.RegularExpressions.Regex.IsMatch(slug, "^[a-z0-9-]+$"))
+			throw new ArgumentException("Slug must be lowercase letters, digits, and hyphens only.", nameof(dto));
+
+		var slugTaken = await Db.Tenants.AsNoTracking().AnyAsync(t => t.Slug == slug, ct);
+		if (slugTaken) throw new InvalidOperationException($"Tenant slug '{slug}' is already in use.");
+
+		// Resolve the calling admin across tenants — they're calling from their own
+		// tenant scope but we need to clone them into the new one.
+		var creator = await Db.Collaborators
+			.IgnoreQueryFilters()
+			.AsNoTracking()
+			.FirstOrDefaultAsync(c => c.Id == creatorCollaboratorId && !c.IsDeleted, ct)
+			?? throw new UnauthorizedAccessException("Unknown collaborator.");
+
+		var tenant = new Domain.Models.Entities.Tenant
+		{
+			Id = Guid.CreateVersion7(),
+			Name = name,
+			Slug = slug,
+			AccentColorHex = accent,
+			LogoUrl = logo,
+			IsActive = true,
+		};
+		Db.Tenants.Add(tenant);
+
+		// Mirror the creator into the new tenant as its first admin so they can
+		// switch in immediately. Same email → the workspace picker will surface
+		// the new tenant on their next login too.
+		var mirror = new Domain.Models.Entities.Collaborator
+		{
+			Id = Guid.CreateVersion7(),
+			TenantId = tenant.Id,
+			FullName = creator.FullName,
+			Email = creator.Email,
+			JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
+			RoleKind = Domain.Models.Enums.CollaboratorRoleKind.Admin,
+			PasswordHash = creator.PasswordHash,
+			EmailVerified = true,
+			EmailVerifiedAt = DateTime.UtcNow,
+			Status = Domain.Models.Enums.CollaboratorStatus.Active,
+			PhotoUrl = creator.PhotoUrl,
+		};
+		Db.Collaborators.Add(mirror);
+
+		await Db.SaveChangesAsync(ct);
+		Logger.LogInformation("Tenant created {Slug} ({Id}) by {Creator}; mirror collaborator {MirrorId}.", slug, tenant.Id, creator.Email, mirror.Id);
+		return ToDto(tenant);
+	}
+
+	public async Task<TenantDto> UpdateAsync(Guid tenantId, UpdateTenantDto dto, CancellationToken ct = default)
+	{
+		var name = (dto.Name ?? string.Empty).Trim();
+		var slug = (dto.Slug ?? string.Empty).Trim().ToLowerInvariant();
+		var accent = string.IsNullOrWhiteSpace(dto.AccentColorHex) ? "#2A6B7E" : dto.AccentColorHex.Trim();
+		var logo = string.IsNullOrWhiteSpace(dto.LogoUrl) ? null : dto.LogoUrl.Trim();
+
+		if (name.Length == 0) throw new ArgumentException("Tenant name is required.", nameof(dto));
+		if (slug.Length == 0) throw new ArgumentException("Tenant slug is required.", nameof(dto));
+		if (!System.Text.RegularExpressions.Regex.IsMatch(slug, "^[a-z0-9-]+$"))
+			throw new ArgumentException("Slug must be lowercase letters, digits, and hyphens only.", nameof(dto));
+
+		var tenant = await Db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct)
+			?? throw new KeyNotFoundException($"Tenant {tenantId} not found.");
+
+		if (!string.Equals(tenant.Slug, slug, StringComparison.Ordinal))
+		{
+			var slugTaken = await Db.Tenants.AsNoTracking().AnyAsync(t => t.Slug == slug && t.Id != tenantId, ct);
+			if (slugTaken) throw new InvalidOperationException($"Tenant slug '{slug}' is already in use.");
+		}
+
+		tenant.Name = name;
+		tenant.Slug = slug;
+		tenant.AccentColorHex = accent;
+		tenant.LogoUrl = logo;
+		tenant.IsActive = dto.IsActive;
+		tenant.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+		return ToDto(tenant);
+	}
+
 	private static TenantDto ToDto(Domain.Models.Entities.Tenant t) => new()
 	{
 		Id = t.Id,

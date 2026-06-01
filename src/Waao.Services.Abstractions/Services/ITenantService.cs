@@ -18,4 +18,14 @@ public interface ITenantService
 	/// Requires a matching Collaborator row with the same email in the target tenant.
 	/// </summary>
 	Task<AuthResultDto> SwitchAsync(Guid currentCollaboratorId, Guid targetTenantId, CancellationToken ct = default);
+
+	/// <summary>
+	/// Creates a new tenant and seeds it with a mirror of the calling admin as its
+	/// first member (Admin role kind). After this returns, the admin can call
+	/// <see cref="SwitchAsync"/> to step into the new tenant.
+	/// </summary>
+	Task<TenantDto> CreateAsync(Guid creatorCollaboratorId, CreateTenantDto dto, CancellationToken ct = default);
+
+	/// <summary>Updates display fields on an existing tenant. Slug edits revalidate uniqueness.</summary>
+	Task<TenantDto> UpdateAsync(Guid tenantId, UpdateTenantDto dto, CancellationToken ct = default);
 }

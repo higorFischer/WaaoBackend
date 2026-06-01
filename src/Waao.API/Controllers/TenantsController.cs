@@ -42,4 +42,20 @@ public class TenantsController(ITenantService Service) : ControllerBase
 	[ProducesResponseType(typeof(IReadOnlyList<TenantDto>), StatusCodes.Status200OK)]
 	public async Task<IActionResult> ListAll(CancellationToken ct)
 		=> Ok(await Service.ListAllAsync(ct));
+
+	/// <summary>Create a new tenant. Mirrors the calling admin into it as the first member.</summary>
+	[HttpPost]
+	[Authorize(Policy = "Admin")]
+	[ProducesResponseType(typeof(TenantDto), StatusCodes.Status201Created)]
+	[ProducesResponseType(StatusCodes.Status409Conflict)]
+	public async Task<IActionResult> Create([FromBody] CreateTenantDto dto, CancellationToken ct)
+		=> Created(string.Empty, await Service.CreateAsync(Me, dto, ct));
+
+	/// <summary>Update a tenant's display fields.</summary>
+	[HttpPut("{id:guid}")]
+	[Authorize(Policy = "Admin")]
+	[ProducesResponseType(typeof(TenantDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> Update(Guid id, [FromBody] UpdateTenantDto dto, CancellationToken ct)
+		=> Ok(await Service.UpdateAsync(id, dto, ct));
 }
