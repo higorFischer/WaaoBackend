@@ -26,6 +26,7 @@ public sealed class AllocationService(
 			.AsNoTracking()
 			.Where(p => !p.IsArchived)
 			.OrderBy(p => p.Position).ThenBy(p => p.Title)
+			.Include(p => p.Department)
 			.Include(p => p.Allocations).ThenInclude(a => a.Collaborator).ThenInclude(c => c.Role)
 			.Include(p => p.Allocations).ThenInclude(a => a.Collaborator).ThenInclude(c => c.Department)
 			.ToListAsync(ct);
@@ -57,6 +58,7 @@ public sealed class AllocationService(
 			.AsNoTracking()
 			.Where(p => !p.IsArchived && p.Allocations.Any(a => a.CollaboratorId == collaboratorId))
 			.OrderBy(p => p.Position)
+			.Include(p => p.Department)
 			.Include(p => p.Allocations.Where(a => a.CollaboratorId == collaboratorId))
 				.ThenInclude(a => a.Collaborator).ThenInclude(c => c.Role)
 			.Include(p => p.Allocations.Where(a => a.CollaboratorId == collaboratorId))
@@ -78,20 +80,29 @@ public sealed class AllocationService(
 			Title = dto.Title,
 			Description = dto.Description,
 			ColorHex = string.IsNullOrWhiteSpace(dto.ColorHex) ? "#2A6B7E" : dto.ColorHex!,
+			DepartmentId = dto.DepartmentId,
 			Position = maxPos + 1,
 			PositionX = (maxPos + 1) % 4 * 280,
 			PositionY = (maxPos + 1) / 4 * 200,
 		};
 		Db.Projects.Add(project);
 		await Db.SaveChangesAsync(ct);
-		return AllocationMapper.ToDto(project);
+
+		var reloaded = await Db.Projects
+			.Include(p => p.Department)
+			.Include(p => p.Allocations).ThenInclude(a => a.Collaborator).ThenInclude(c => c.Role)
+			.Include(p => p.Allocations).ThenInclude(a => a.Collaborator).ThenInclude(c => c.Department)
+			.FirstAsync(p => p.Id == project.Id, ct);
+		return AllocationMapper.ToDto(reloaded);
 	}
 
 	public async Task<ProjectWithAllocationsDto> UpdateProjectAsync(Guid projectId, UpdateProjectDto dto, CancellationToken ct = default)
 	{
 		await UpdateProjectValidator.ValidateAndThrowAsync(dto, ct);
 
-		var project = await Db.Projects.Include(p => p.Allocations).ThenInclude(a => a.Collaborator).ThenInclude(c => c.Role)
+		var project = await Db.Projects
+			.Include(p => p.Department)
+			.Include(p => p.Allocations).ThenInclude(a => a.Collaborator).ThenInclude(c => c.Role)
 			.Include(p => p.Allocations).ThenInclude(a => a.Collaborator).ThenInclude(c => c.Department)
 			.FirstOrDefaultAsync(p => p.Id == projectId, ct)
 			?? throw new KeyNotFoundException($"Project {projectId} not found.");
@@ -99,8 +110,11 @@ public sealed class AllocationService(
 		project.Title = dto.Title;
 		project.Description = dto.Description;
 		project.ColorHex = dto.ColorHex;
+		project.DepartmentId = dto.DepartmentId;
 		project.UpdatedAt = DateTime.UtcNow;
 		await Db.SaveChangesAsync(ct);
+		// Refresh department nav after DepartmentId change
+		await Db.Entry(project).Reference(p => p.Department).LoadAsync(ct);
 		return AllocationMapper.ToDto(project);
 	}
 

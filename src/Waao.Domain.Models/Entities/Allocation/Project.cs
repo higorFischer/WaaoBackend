@@ -15,6 +15,10 @@ public class Project : Entity
 	public virtual Project? Parent { get; set; }
 	public virtual ICollection<Project> Children { get; set; } = [];
 
+	/// <summary>Optional owning department (drives filters on the dashboard / allocation board).</summary>
+	public Guid? DepartmentId { get; set; }
+	public virtual Department? Department { get; set; }
+
 	public virtual ICollection<ProjectAllocation> Allocations { get; set; } = [];
 	public virtual ICollection<ProjectConnection> OutgoingConnections { get; set; } = [];
 }

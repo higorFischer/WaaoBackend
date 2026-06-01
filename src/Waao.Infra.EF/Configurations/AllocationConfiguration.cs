@@ -21,7 +21,13 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
 			.HasForeignKey(x => x.ParentProjectId)
 			.OnDelete(DeleteBehavior.Restrict);
 
+		builder.HasOne(x => x.Department)
+			.WithMany()
+			.HasForeignKey(x => x.DepartmentId)
+			.OnDelete(DeleteBehavior.SetNull);
+
 		builder.HasIndex(x => x.ParentProjectId);
+		builder.HasIndex(x => x.DepartmentId);
 
 		builder.HasQueryFilter(x => !x.IsDeleted);
 	}

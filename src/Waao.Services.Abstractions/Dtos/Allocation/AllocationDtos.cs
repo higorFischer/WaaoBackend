@@ -29,6 +29,8 @@ public record ProjectWithAllocationsDto
 	public double PositionX { get; init; }
 	public double PositionY { get; init; }
 	public Guid? ParentProjectId { get; init; }
+	public Guid? DepartmentId { get; init; }
+	public string? DepartmentName { get; init; }
 	public IReadOnlyList<AllocationDto> Allocations { get; init; } = [];
 }
 
@@ -65,6 +67,7 @@ public record CreateProjectDto
 	public string Title { get; init; } = string.Empty;
 	public string? Description { get; init; }
 	public string? ColorHex { get; init; }
+	public Guid? DepartmentId { get; init; }
 }
 
 public record UpdateProjectDto
@@ -72,6 +75,7 @@ public record UpdateProjectDto
 	public string Title { get; init; } = string.Empty;
 	public string? Description { get; init; }
 	public string ColorHex { get; init; } = "#2A6B7E";
+	public Guid? DepartmentId { get; init; }
 }
 
 public record ReorderProjectsDto
