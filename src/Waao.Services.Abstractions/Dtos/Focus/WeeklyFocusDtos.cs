@@ -36,6 +36,15 @@ public record WeeklyFocusProjectDto
 	public string ProjectColorHex { get; init; } = "#2A6B7E";
 	public Guid? ParentProjectId { get; init; }
 	public int Position { get; init; }
+	public IReadOnlyList<WeeklyFocusAllocationDto> Allocations { get; init; } = [];
+}
+
+public record WeeklyFocusAllocationDto
+{
+	public Guid CollaboratorId { get; init; }
+	public string FullName { get; init; } = string.Empty;
+	public string? PhotoUrl { get; init; }
+	public string? RoleTitle { get; init; }
 }
 
 public record CreateWeeklyFocusDto

@@ -19,7 +19,7 @@ public sealed class WeeklyFocusService(
 			.ThenByDescending(f => f.IsoWeek)
 			.ToListAsync(ct);
 
-		return list.Select(ToDto).ToList();
+		return await HydrateManyAsync(list, ct);
 	}
 
 	public async Task<WeeklyFocusDto?> GetCurrentPublishedAsync(CancellationToken ct = default)
@@ -30,7 +30,7 @@ public sealed class WeeklyFocusService(
 			.OrderByDescending(f => f.PublishedAt)
 			.FirstOrDefaultAsync(ct);
 
-		return focus is null ? null : ToDto(focus);
+		return focus is null ? null : await HydrateAsync(focus, ct);
 	}
 
 	public async Task<WeeklyFocusDto?> GetCurrentForAdminAsync(CancellationToken ct = default)
@@ -41,14 +41,14 @@ public sealed class WeeklyFocusService(
 			.OrderByDescending(f => f.UpdatedAt ?? f.CreatedAt)
 			.FirstOrDefaultAsync(ct);
 
-		if (focus is not null) return ToDto(focus);
+		if (focus is not null) return await HydrateAsync(focus, ct);
 
 		var latest = await Query()
 			.OrderByDescending(f => f.IsoYear)
 			.ThenByDescending(f => f.IsoWeek)
 			.FirstOrDefaultAsync(ct);
 
-		return latest is null ? null : ToDto(latest);
+		return latest is null ? null : await HydrateAsync(latest, ct);
 	}
 
 	public async Task<WeeklyFocusDto> GetByIdAsync(Guid id, CancellationToken ct = default)
@@ -56,7 +56,7 @@ public sealed class WeeklyFocusService(
 		var focus = await Query().FirstOrDefaultAsync(f => f.Id == id, ct)
 			?? throw new KeyNotFoundException($"WeeklyFocus {id} not found.");
 
-		return ToDto(focus);
+		return await HydrateAsync(focus, ct);
 	}
 
 	public async Task<WeeklyFocusDto> CreateAsync(CreateWeeklyFocusDto dto, Guid ownerId, CancellationToken ct = default)
@@ -112,7 +112,7 @@ public sealed class WeeklyFocusService(
 		Logger.LogInformation("WeeklyFocus {Id} created for {Year}-W{Week} by {OwnerId} (published={Publish}).",
 			focus.Id, focus.IsoYear, focus.IsoWeek, ownerId, focus.IsPublished);
 
-		return ToDto(await ReloadAsync(focus.Id, ct));
+		return await HydrateAsync(await ReloadAsync(focus.Id, ct), ct);
 	}
 
 	public async Task<WeeklyFocusDto> UpdateAsync(Guid id, UpdateWeeklyFocusDto dto, CancellationToken ct = default)
@@ -141,7 +141,7 @@ public sealed class WeeklyFocusService(
 		await SyncProjectsAsync(focus, dto.ProjectIds, now, ct);
 
 		await Db.SaveChangesAsync(ct);
-		return ToDto(await ReloadAsync(id, ct));
+		return await HydrateAsync(await ReloadAsync(id, ct), ct);
 	}
 
 	public async Task<WeeklyFocusDto> SetPublishedAsync(Guid id, bool publish, CancellationToken ct = default)
@@ -156,7 +156,7 @@ public sealed class WeeklyFocusService(
 		await Db.SaveChangesAsync(ct);
 		Logger.LogInformation("WeeklyFocus {Id} {Action}.", id, publish ? "published" : "unpublished");
 
-		return ToDto(await ReloadAsync(id, ct));
+		return await HydrateAsync(await ReloadAsync(id, ct), ct);
 	}
 
 	public async Task<WeeklyFocusDto> ToggleGoalAsync(Guid id, Guid goalId, CancellationToken ct = default)
@@ -170,7 +170,7 @@ public sealed class WeeklyFocusService(
 		goal.UpdatedAt = DateTime.UtcNow;
 
 		await Db.SaveChangesAsync(ct);
-		return ToDto(await ReloadAsync(id, ct));
+		return await HydrateAsync(await ReloadAsync(id, ct), ct);
 	}
 
 	public async Task DeleteAsync(Guid id, CancellationToken ct = default)
@@ -333,6 +333,72 @@ public sealed class WeeklyFocusService(
 		var start = weekOneMonday.AddDays((isoWeek - 1) * 7);
 		var end = start.AddDays(6);
 		return (DateOnly.FromDateTime(start), DateOnly.FromDateTime(end));
+	}
+
+	private async Task<WeeklyFocusDto> HydrateAsync(WeeklyFocus focus, CancellationToken ct)
+		=> (await HydrateManyAsync(new[] { focus }, ct))[0];
+
+	private async Task<IReadOnlyList<WeeklyFocusDto>> HydrateManyAsync(IEnumerable<WeeklyFocus> focuses, CancellationToken ct)
+	{
+		var list = focuses as IList<WeeklyFocus> ?? focuses.ToList();
+		if (list.Count == 0) return [];
+
+		var projectIds = list
+			.SelectMany(f => f.Projects.Select(p => p.ProjectId))
+			.Distinct()
+			.ToList();
+
+		Dictionary<Guid, List<WeeklyFocusAllocationDto>> allocsByProject;
+
+		if (projectIds.Count == 0)
+		{
+			allocsByProject = [];
+		}
+		else
+		{
+			var rows = await Db.ProjectAllocations
+				.AsNoTracking()
+				.Where(a => projectIds.Contains(a.ProjectId) && !a.IsDeleted)
+				.Join(Db.Collaborators.AsNoTracking().Include(c => c.Role).Where(c => !c.IsDeleted),
+					a => a.CollaboratorId,
+					c => c.Id,
+					(a, c) => new
+					{
+						a.ProjectId,
+						a.Position,
+						a.AllocatedAt,
+						CollaboratorId = c.Id,
+						c.FullName,
+						c.PhotoUrl,
+						RoleTitle = c.Role != null ? c.Role.Title : null,
+					})
+				.OrderBy(x => x.Position).ThenBy(x => x.AllocatedAt)
+				.ToListAsync(ct);
+
+			allocsByProject = rows
+				.GroupBy(x => x.ProjectId)
+				.ToDictionary(g => g.Key, g => g.Select(x => new WeeklyFocusAllocationDto
+				{
+					CollaboratorId = x.CollaboratorId,
+					FullName = x.FullName,
+					PhotoUrl = x.PhotoUrl,
+					RoleTitle = x.RoleTitle,
+				}).ToList());
+		}
+
+		return list.Select(f => ToDto(f) with
+		{
+			Projects = f.Projects.OrderBy(p => p.Position).Select(p => new WeeklyFocusProjectDto
+			{
+				Id = p.Id,
+				ProjectId = p.ProjectId,
+				ProjectTitle = p.ProjectTitle,
+				ProjectColorHex = p.ProjectColorHex,
+				ParentProjectId = p.ParentProjectId,
+				Position = p.Position,
+				Allocations = allocsByProject.TryGetValue(p.ProjectId, out var a) ? a : [],
+			}).ToList(),
+		}).ToList();
 	}
 
 	private static WeeklyFocusDto ToDto(WeeklyFocus f) => new()
