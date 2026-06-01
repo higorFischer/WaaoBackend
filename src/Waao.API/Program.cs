@@ -131,6 +131,9 @@ builder.Services.AddScoped<ICallChannelService, Waao.Services.Services.Calls.Cal
 // Peer-to-peer feedback
 builder.Services.AddScoped<IPeerFeedbackService, Waao.Services.Services.Feedback.PeerFeedbackService>();
 
+// Announcements (scheduled banners)
+builder.Services.AddScoped<IAnnouncementService, Waao.Services.Services.Announcements.AnnouncementService>();
+
 // Anniversary / birthday celebrations (daily background tick)
 builder.Services.AddHostedService<Waao.API.HostedServices.AnniversaryHostedService>();
 

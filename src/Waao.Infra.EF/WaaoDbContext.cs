@@ -7,6 +7,7 @@ using Waao.Domain.Models.Entities.Kanban;
 using Waao.Domain.Models.Entities.Meetings;
 using Waao.Domain.Models.Entities.Messaging;
 using Waao.Domain.Models.Entities.Notifications;
+using Waao.Domain.Models.Entities.Announcements;
 using Waao.Domain.Models.Entities.Calls;
 using Waao.Domain.Models.Entities.Focus;
 using Waao.Domain.Models.Entities.Kudos;
@@ -100,6 +101,10 @@ public class WaaoDbContext(DbContextOptions<WaaoDbContext> Options) : DbContext(
 
 	// Voice/video call channels (Discord-style persistent rooms)
 	public DbSet<CallChannel> CallChannels => Set<CallChannel>();
+
+	// Announcements (scheduled banners shown above the weekly focus)
+	public DbSet<Announcement> Announcements => Set<Announcement>();
+	public DbSet<AnnouncementTarget> AnnouncementTargets => Set<AnnouncementTarget>();
 
 	// Internal feedback ("what's happening inside the company")
 	public DbSet<Waao.Domain.Models.Entities.Feedback.Feedback> Feedback => Set<Waao.Domain.Models.Entities.Feedback.Feedback>();

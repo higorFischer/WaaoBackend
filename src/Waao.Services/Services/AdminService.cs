@@ -226,18 +226,21 @@ public sealed class AdminService(
 			.ToDictionaryAsync(x => x.Id, x => x.Count, ct);
 
 		return await Db.Departments
+			.Include(d => d.ParentDepartment)
 			.OrderBy(d => d.Name)
 			.Select(d => new DepartmentDto
 			{
 				Id = d.Id, Name = d.Name, Description = d.Description, ColorHex = d.ColorHex,
 				CollaboratorCount = counts.GetValueOrDefault(d.Id, 0),
+				ParentDepartmentId = d.ParentDepartmentId,
+				ParentDepartmentName = d.ParentDepartment != null ? d.ParentDepartment.Name : null,
 			})
 			.ToListAsync(ct);
 	}
 
 	public async Task<DepartmentDto> CreateDepartmentAsync(CreateDepartmentDto dto, CancellationToken ct = default)
 	{
-		var entity = new Department { Id = Guid.CreateVersion7(), Name = dto.Name, Description = dto.Description, ColorHex = dto.ColorHex };
+		var entity = new Department { Id = Guid.CreateVersion7(), Name = dto.Name, Description = dto.Description, ColorHex = dto.ColorHex, ParentDepartmentId = dto.ParentDepartmentId };
 		Db.Departments.Add(entity);
 
 		// Auto-create a Department-scope calendar for the new department.
@@ -282,11 +285,32 @@ public sealed class AdminService(
 	{
 		var entity = await Db.Departments.FirstOrDefaultAsync(d => d.Id == id, ct)
 			?? throw new KeyNotFoundException($"Department {id} not found.");
+		// Prevent cycles: a department can't be its own ancestor.
+		if (dto.ParentDepartmentId.HasValue)
+		{
+			if (dto.ParentDepartmentId.Value == id)
+				throw new InvalidOperationException("A department cannot be its own parent.");
+			// Walk up the chain to make sure 'id' doesn't already appear above the proposed parent.
+			var ancestors = await Db.Departments.AsNoTracking().Select(d => new { d.Id, d.ParentDepartmentId }).ToListAsync(ct);
+			var visited = new HashSet<Guid> { id };
+			var cur = dto.ParentDepartmentId;
+			while (cur.HasValue)
+			{
+				if (!visited.Add(cur.Value))
+					throw new InvalidOperationException("Setting this parent would create a cycle.");
+				cur = ancestors.FirstOrDefault(a => a.Id == cur.Value).ParentDepartmentId;
+			}
+		}
+
 		entity.Name = dto.Name; entity.Description = dto.Description; entity.ColorHex = dto.ColorHex;
+		entity.ParentDepartmentId = dto.ParentDepartmentId;
 		entity.UpdatedAt = DateTime.UtcNow;
 		await Db.SaveChangesAsync(ct);
 		var count = await Db.Collaborators.CountAsync(c => c.DepartmentId == entity.Id, ct);
-		return new DepartmentDto { Id = entity.Id, Name = entity.Name, Description = entity.Description, ColorHex = entity.ColorHex, CollaboratorCount = count };
+		string? parentName = null;
+		if (entity.ParentDepartmentId.HasValue)
+			parentName = await Db.Departments.Where(d => d.Id == entity.ParentDepartmentId).Select(d => d.Name).FirstOrDefaultAsync(ct);
+		return new DepartmentDto { Id = entity.Id, Name = entity.Name, Description = entity.Description, ColorHex = entity.ColorHex, CollaboratorCount = count, ParentDepartmentId = entity.ParentDepartmentId, ParentDepartmentName = parentName };
 	}
 
 	public async Task DeleteDepartmentAsync(Guid id, CancellationToken ct = default)

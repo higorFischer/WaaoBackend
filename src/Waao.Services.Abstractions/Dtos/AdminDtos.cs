@@ -55,6 +55,8 @@ public record DepartmentDto
 	public string? Description { get; init; }
 	public string ColorHex { get; init; } = "#6366F1";
 	public int CollaboratorCount { get; init; }
+	public Guid? ParentDepartmentId { get; init; }
+	public string? ParentDepartmentName { get; init; }
 }
 
 public record CreateDepartmentDto
@@ -62,6 +64,7 @@ public record CreateDepartmentDto
 	public string Name { get; init; } = string.Empty;
 	public string? Description { get; init; }
 	public string ColorHex { get; init; } = "#6366F1";
+	public Guid? ParentDepartmentId { get; init; }
 }
 
 public record UpdateDepartmentDto : CreateDepartmentDto;
