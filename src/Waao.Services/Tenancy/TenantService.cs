@@ -219,6 +219,16 @@ public sealed class TenantService(
 		return ToDto(tenant);
 	}
 
+	public async Task<TenantDto> SetLogoAsync(Guid tenantId, string? logoUrl, CancellationToken ct = default)
+	{
+		var tenant = await Db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct)
+			?? throw new KeyNotFoundException($"Tenant {tenantId} not found.");
+		tenant.LogoUrl = string.IsNullOrWhiteSpace(logoUrl) ? null : logoUrl.Trim();
+		tenant.UpdatedAt = DateTime.UtcNow;
+		await Db.SaveChangesAsync(ct);
+		return ToDto(tenant);
+	}
+
 	public async Task<IReadOnlyList<TenantAllowedDomainDto>> ListAllowedDomainsAsync(Guid tenantId, CancellationToken ct = default)
 	{
 		var rows = await Db.TenantAllowedEmailDomains.AsNoTracking()

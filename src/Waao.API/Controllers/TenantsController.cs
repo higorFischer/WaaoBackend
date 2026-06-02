@@ -95,4 +95,60 @@ public class TenantsController(ITenantService Service) : ControllerBase
 		await Service.RemoveAllowedDomainAsync(domainId, ct);
 		return NoContent();
 	}
+
+	/// <summary>
+	/// Uploads a logo image to R2 and stores the public URL on the tenant. Shown in the sidebar
+	/// brand block and the workspace switcher. Same constraints as the avatar uploader (8 MB,
+	/// image/* MIME, public bucket so cross-origin reads work).
+	/// </summary>
+	[HttpPost("{id:guid}/logo")]
+	[Authorize(Policy = "SuperAdmin")]
+	[ProducesResponseType(typeof(TenantDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
+	[RequestSizeLimit(8_000_000)]
+	public async Task<IActionResult> UploadLogo(
+		Guid id,
+		[FromForm] IFormFile file,
+		[FromServices] Waao.Services.Abstractions.Services.IR2StorageService Storage,
+		[FromServices] ILogger<TenantsController> Logger,
+		CancellationToken ct)
+	{
+		if (file is null || file.Length == 0) return BadRequest("Empty file.");
+		if (file.Length > 8_000_000) return StatusCode(StatusCodes.Status413PayloadTooLarge);
+		var mime = file.ContentType ?? "application/octet-stream";
+		if (!mime.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+			return BadRequest("Logo must be an image.");
+		if (!Storage.IsEnabled)
+			return StatusCode(StatusCodes.Status503ServiceUnavailable, "Storage is not configured.");
+
+		var ext = mime switch
+		{
+			"image/jpeg"   => "jpg",
+			"image/png"    => "png",
+			"image/webp"   => "webp",
+			"image/svg+xml"=> "svg",
+			"image/gif"    => "gif",
+			_              => "bin",
+		};
+		var key = $"waao/tenant-logos/{id:N}/{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.CreateVersion7():N}.{ext}";
+		try
+		{
+			using var stream = file.OpenReadStream();
+			var url = await Storage.UploadAsync(key, stream, mime, ct);
+			return Ok(await Service.SetLogoAsync(id, url, ct));
+		}
+		catch (Exception ex)
+		{
+			Logger.LogError(ex, "Tenant logo upload failed tenant={Tenant} fileName={Name} size={Size}", id, file.FileName, file.Length);
+			return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+		}
+	}
+
+	/// <summary>Clears the tenant's logo (sets logo_url to null).</summary>
+	[HttpDelete("{id:guid}/logo")]
+	[Authorize(Policy = "SuperAdmin")]
+	[ProducesResponseType(typeof(TenantDto), StatusCodes.Status200OK)]
+	public async Task<IActionResult> ClearLogo(Guid id, CancellationToken ct)
+		=> Ok(await Service.SetLogoAsync(id, null, ct));
 }

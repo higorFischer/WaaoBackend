@@ -45,6 +45,9 @@ public interface ITenantService
 	/// <summary>Removes (soft-delete) an allowed domain by row id.</summary>
 	Task RemoveAllowedDomainAsync(Guid id, CancellationToken ct = default);
 
+	/// <summary>Sets the tenant's logo URL (or null to clear).</summary>
+	Task<TenantDto> SetLogoAsync(Guid tenantId, string? logoUrl, CancellationToken ct = default);
+
 	/// <summary>
 	/// Looks up the tenant that owns the given email's domain. Used at registration to route
 	/// the new collaborator to the right tenant. Returns null when no tenant has allowlisted
