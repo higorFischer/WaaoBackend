@@ -1,6 +1,8 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Waao.Services.Abstractions.Dtos;
+using Waao.Services.Abstractions.Dtos.Team;
 using Waao.Services.Abstractions.Services;
 
 namespace Waao.API.Controllers;
@@ -10,10 +12,18 @@ namespace Waao.API.Controllers;
 [Authorize]
 public class CollaboratorsController(ICollaboratorService Service) : ControllerBase
 {
+	private Guid Me => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
+		? id : throw new UnauthorizedAccessException("Missing subject claim.");
+
 	[HttpGet]
 	[ProducesResponseType(typeof(IReadOnlyList<CollaboratorDto>), StatusCodes.Status200OK)]
 	public async Task<IActionResult> GetAll(CancellationToken ct)
 		=> Ok(await Service.GetAllAsync(ct));
+
+	[HttpGet("my-team")]
+	[ProducesResponseType(typeof(IReadOnlyList<TeamMemberSummaryDto>), StatusCodes.Status200OK)]
+	public async Task<IActionResult> GetMyTeam([FromQuery] bool all, CancellationToken ct)
+		=> Ok(await Service.GetMyTeamAsync(Me, all, ct));
 
 	[HttpGet("{id:guid}")]
 	[ProducesResponseType(typeof(CollaboratorDto), StatusCodes.Status200OK)]

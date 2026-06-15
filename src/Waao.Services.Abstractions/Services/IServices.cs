@@ -1,4 +1,5 @@
 using Waao.Services.Abstractions.Dtos;
+using Waao.Services.Abstractions.Dtos.Team;
 
 namespace Waao.Services.Abstractions.Services;
 
@@ -9,6 +10,13 @@ public interface ICollaboratorService
 	Task<CollaboratorDto> CreateAsync(CreateCollaboratorDto dto, CancellationToken ct = default);
 	Task<CollaboratorDto> UpdateAsync(Guid id, UpdateCollaboratorDto dto, CancellationToken ct = default);
 	Task DeleteAsync(Guid id, CancellationToken ct = default);
+
+	/// <summary>
+	/// The caller's direct reports as lightweight summaries. When <paramref name="all"/> is true
+	/// AND the caller is HR/Admin, returns every active collaborator (the team-wide overview).
+	/// A non-staff caller passing <c>all=true</c> still only sees their own direct reports.
+	/// </summary>
+	Task<IReadOnlyList<TeamMemberSummaryDto>> GetMyTeamAsync(Guid callerId, bool all = false, CancellationToken ct = default);
 }
 
 public interface ICareerEventService
