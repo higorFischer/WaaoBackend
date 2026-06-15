@@ -7,6 +7,7 @@ using Waao.Services.Abstractions.Services;
 using Waao.Services.Auth;
 using Waao.Services.Gamification;
 using Waao.Services.Services;
+using Waao.Services.Tenancy;
 using Waao.Services.Validation;
 
 namespace Waao.Tests.Support;
@@ -65,6 +66,9 @@ public sealed class AuthServiceFactory
 			})
 			.Build();
 
+		var tenantContext = new TenantContext();
+		var tenantService = new TenantService(db, tenantContext, jwt, NullLogger<TenantService>.Instance);
+
 		var service = new AuthService(
 			db,
 			jwt,
@@ -77,6 +81,8 @@ public sealed class AuthServiceFactory
 			new VerifyEmailValidator(),
 			new ResendVerificationValidator(),
 			config,
+			tenantContext,
+			tenantService,
 			NullLogger<AuthService>.Instance);
 
 		return new AuthServiceFactory(service, db, emailSender);

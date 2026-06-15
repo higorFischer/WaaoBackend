@@ -18,4 +18,7 @@ public sealed class NullPushNotificationService : IPushNotificationService
 
 	public Task SendToCollaboratorAsync(Guid collaboratorId, string title, string body, string? url, CancellationToken ct = default)
 		=> Task.CompletedTask;
+
+	public Task SendRichToCollaboratorAsync(Guid collaboratorId, string title, string body, string? url, string? iconUrl, string? tag, CancellationToken ct = default)
+		=> Task.CompletedTask;
 }
