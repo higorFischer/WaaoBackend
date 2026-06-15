@@ -15,6 +15,8 @@ using Waao.Domain.Models.Entities.Calls;
 using Waao.Domain.Models.Entities.Focus;
 using Waao.Domain.Models.Entities.Kudos;
 using Waao.Domain.Models.Entities.OneOnOnes;
+using Waao.Domain.Models.Entities.Skills;
+using Waao.Domain.Models.Entities.Team;
 using Waao.Domain.Models.Entities.TimeOff;
 
 namespace Waao.Infra.EF;
@@ -119,6 +121,11 @@ public class WaaoDbContext : DbContext
 	// 1:1s (manager <-> report meetings)
 	public DbSet<OneOnOne> OneOnOnes => Set<OneOnOne>();
 	public DbSet<OneOnOneActionItem> OneOnOneActionItems => Set<OneOnOneActionItem>();
+
+	// Team management — skills matrix + private manager notes
+	public DbSet<Skill> Skills => Set<Skill>();
+	public DbSet<CollaboratorSkill> CollaboratorSkills => Set<CollaboratorSkill>();
+	public DbSet<ManagerNote> ManagerNotes => Set<ManagerNote>();
 
 	// Voice/video call channels (Discord-style persistent rooms)
 	public DbSet<CallChannel> CallChannels => Set<CallChannel>();
