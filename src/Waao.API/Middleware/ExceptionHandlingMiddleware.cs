@@ -50,6 +50,19 @@ public sealed class ExceptionHandlingMiddleware(RequestDelegate Next, ILogger<Ex
 			};
 			await context.Response.WriteAsync(JsonSerializer.Serialize(payload, JsonOptions));
 		}
+		catch (ForbiddenAccessException ex)
+		{
+			context.Response.StatusCode = StatusCodes.Status403Forbidden;
+			context.Response.ContentType = "application/problem+json";
+			var payload = new
+			{
+				type = "https://datatracker.ietf.org/doc/html/rfc9110#name-403-forbidden",
+				title = "Forbidden",
+				status = 403,
+				detail = ex.Message,
+			};
+			await context.Response.WriteAsync(JsonSerializer.Serialize(payload, JsonOptions));
+		}
 		catch (KeyNotFoundException ex)
 		{
 			context.Response.StatusCode = StatusCodes.Status404NotFound;
