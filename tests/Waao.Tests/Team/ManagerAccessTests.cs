@@ -17,74 +17,62 @@ public class ManagerAccessTests
 		};
 
 	[Fact]
-	public void IsStaff_True_ForHrAndAdmin()
+	public void IsAdmin_True_OnlyForAdmin()
 	{
-		ManagerAccess.IsStaff(Person(CollaboratorRoleKind.HR)).Should().BeTrue();
-		ManagerAccess.IsStaff(Person(CollaboratorRoleKind.Admin)).Should().BeTrue();
-		ManagerAccess.IsStaff(Person(CollaboratorRoleKind.Collaborator)).Should().BeFalse();
-	}
-
-	[Fact]
-	public void HrCanManageAnyone()
-	{
-		var hr = Person(CollaboratorRoleKind.HR);
-		var target = Person();
-		ManagerAccess.CanManage(hr, target).Should().BeTrue();
+		ManagerAccess.IsAdmin(Person(CollaboratorRoleKind.Admin)).Should().BeTrue();
+		ManagerAccess.IsAdmin(Person(CollaboratorRoleKind.HR)).Should().BeFalse();
+		ManagerAccess.IsAdmin(Person(CollaboratorRoleKind.Collaborator)).Should().BeFalse();
 	}
 
 	[Fact]
 	public void AdminCanManageAnyone()
 	{
-		var admin = Person(CollaboratorRoleKind.Admin);
-		var target = Person();
-		ManagerAccess.CanManage(admin, target).Should().BeTrue();
+		ManagerAccess.CanManage(Person(CollaboratorRoleKind.Admin), Person()).Should().BeTrue();
 	}
 
 	[Fact]
-	public void ManagerCanManageDirectReport()
+	public void HrCannotManage()
+	{
+		ManagerAccess.CanManage(Person(CollaboratorRoleKind.HR), Person()).Should().BeFalse();
+	}
+
+	[Fact]
+	public void ManagerCannotManageDirectReport()
 	{
 		var mgr = Person();
 		var target = Person(managerId: mgr.Id);
-		ManagerAccess.CanManage(mgr, target).Should().BeTrue();
+		ManagerAccess.CanManage(mgr, target).Should().BeFalse();
 	}
 
 	[Fact]
 	public void PeerCannotManage()
 	{
-		var peer = Person();
-		var target = Person();
-		ManagerAccess.CanManage(peer, target).Should().BeFalse();
+		ManagerAccess.CanManage(Person(), Person()).Should().BeFalse();
 	}
 
 	[Fact]
-	public void ManagerCanReadDirectReportNotes()
+	public void AdminCanReadAnyoneNotes()
+	{
+		ManagerAccess.CanReadManagerNotes(Person(CollaboratorRoleKind.Admin), Person()).Should().BeTrue();
+	}
+
+	[Fact]
+	public void HrCannotReadNotes()
+	{
+		ManagerAccess.CanReadManagerNotes(Person(CollaboratorRoleKind.HR), Person()).Should().BeFalse();
+	}
+
+	[Fact]
+	public void ManagerCannotReadDirectReportNotes()
 	{
 		var mgr = Person();
 		var target = Person(managerId: mgr.Id);
-		ManagerAccess.CanReadManagerNotes(mgr, target).Should().BeTrue();
+		ManagerAccess.CanReadManagerNotes(mgr, target).Should().BeFalse();
 	}
 
 	[Fact]
-	public void HrCanReadOthersNotes()
+	public void NonAdminSubjectCannotReadOwnNotes()
 	{
-		var hr = Person(CollaboratorRoleKind.HR);
-		var target = Person();
-		ManagerAccess.CanReadManagerNotes(hr, target).Should().BeTrue();
-	}
-
-	[Fact]
-	public void SubjectCannotReadOwnManagerNotes_EvenWhenStaff()
-	{
-		var self = Person(CollaboratorRoleKind.Admin);
-		ManagerAccess.CanReadManagerNotes(self, self).Should().BeFalse();
-	}
-
-	[Fact]
-	public void SubjectCanManageOwnSkillsButNotReadOwnNotes()
-	{
-		// CanManage(self, self) is false for a plain collaborator; skills "read own" is
-		// handled separately at the endpoint (caller.Id == target.Id). What we assert
-		// here is the security invariant: a subject NEVER reads their own manager notes.
 		var self = Person();
 		ManagerAccess.CanReadManagerNotes(self, self).Should().BeFalse();
 	}

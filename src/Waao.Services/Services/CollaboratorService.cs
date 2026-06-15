@@ -2,6 +2,7 @@ using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Waao.Domain.Models.Entities;
 using Waao.Infra.EF;
+using Waao.Services.Abstractions;
 using Waao.Services.Abstractions.Dtos;
 using Waao.Services.Abstractions.Dtos.Team;
 using Waao.Services.Abstractions.Services;
@@ -108,7 +109,11 @@ public sealed class CollaboratorService(
 		var caller = await Db.Collaborators.FirstOrDefaultAsync(c => c.Id == callerId, ct)
 			?? throw new KeyNotFoundException($"Collaborator {callerId} not found");
 
-		var includeEveryone = all && ManagerAccess.IsStaff(caller);
+		// Admin-only: team rollups expose data recorded about people, so only administrators may read them.
+		if (!ManagerAccess.IsAdmin(caller))
+			throw new ForbiddenAccessException("Only administrators can view team data.");
+
+		var includeEveryone = all;
 
 		var members = await Db.Collaborators
 			.Include(c => c.Role)

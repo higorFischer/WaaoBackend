@@ -8,7 +8,7 @@ namespace Waao.API.Controllers;
 
 [ApiController]
 [Route("api/waao")]
-[Authorize]
+[Authorize(Policy = "Admin")]
 public class ManagerNotesController(IManagerNoteService Service) : ControllerBase
 {
 	private Guid Me => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)

@@ -84,8 +84,8 @@ public sealed class ManagerNoteService(
 
 	private static void EnsureAuthorOrStaff(Collaborator caller, ManagerNote note)
 	{
-		if (note.AuthorId != caller.Id && !ManagerAccess.IsStaff(caller))
-			throw new ForbiddenAccessException("Only the author or HR/Admin can modify this manager note.");
+		if (note.AuthorId != caller.Id && !ManagerAccess.IsAdmin(caller))
+			throw new ForbiddenAccessException("Only the author or an administrator can modify this manager note.");
 	}
 
 	private async Task<(Collaborator Caller, Collaborator Target)> LoadPairAsync(Guid callerId, Guid targetId, CancellationToken ct)

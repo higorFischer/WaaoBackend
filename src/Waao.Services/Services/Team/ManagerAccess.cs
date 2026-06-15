@@ -10,18 +10,20 @@ namespace Waao.Services.Services.Team;
 /// </summary>
 public static class ManagerAccess
 {
-	/// <summary>HR and Admin are "staff" — they can manage anyone.</summary>
-	public static bool IsStaff(Collaborator caller)
-		=> caller.RoleKind is CollaboratorRoleKind.HR or CollaboratorRoleKind.Admin;
-
-	/// <summary>Caller may manage the target if they are staff or the target's direct manager.</summary>
-	public static bool CanManage(Collaborator caller, Collaborator target)
-		=> IsStaff(caller) || target.ManagerId == caller.Id;
-
 	/// <summary>
-	/// Private review material: staff or the managing manager, but NEVER the subject —
-	/// a collaborator can never read their own manager notes.
+	/// Team Management data is ADMIN-ONLY. Only administrators may read or write anything
+	/// recorded about a person (skills assessments, manager notes) or view team rollups.
+	/// HR, a person's manager, and the person themselves have NO access.
 	/// </summary>
+	public static bool IsAdmin(Collaborator caller)
+		=> caller.RoleKind == CollaboratorRoleKind.Admin;
+
+	/// <summary>Caller may manage the target's team data only if they are an administrator.
+	/// (<paramref name="target"/> retained for call-site stability / future per-target rules.)</summary>
+	public static bool CanManage(Collaborator caller, Collaborator target)
+		=> IsAdmin(caller);
+
+	/// <summary>Private review material — administrators only.</summary>
 	public static bool CanReadManagerNotes(Collaborator caller, Collaborator target)
-		=> caller.Id != target.Id && CanManage(caller, target);
+		=> IsAdmin(caller);
 }

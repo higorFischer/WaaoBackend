@@ -21,6 +21,7 @@ public class CollaboratorsController(ICollaboratorService Service) : ControllerB
 		=> Ok(await Service.GetAllAsync(ct));
 
 	[HttpGet("my-team")]
+	[Authorize(Policy = "Admin")]
 	[ProducesResponseType(typeof(IReadOnlyList<TeamMemberSummaryDto>), StatusCodes.Status200OK)]
 	public async Task<IActionResult> GetMyTeam([FromQuery] bool all, CancellationToken ct)
 		=> Ok(await Service.GetMyTeamAsync(Me, all, ct));

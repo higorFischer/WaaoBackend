@@ -70,8 +70,8 @@ public sealed class SkillService(
 	{
 		var (caller, target) = await LoadPairAsync(callerId, collaboratorId, ct);
 
-		// People may always read their OWN skills; otherwise the caller must be able to manage them.
-		if (caller.Id != target.Id && !ManagerAccess.CanManage(caller, target))
+		// Admin-only: nobody (not even the subject) may read a collaborator's skills unless they are an administrator.
+		if (!ManagerAccess.CanManage(caller, target))
 			throw new ForbiddenAccessException("You are not allowed to view this collaborator's skills.");
 
 		return await Db.CollaboratorSkills

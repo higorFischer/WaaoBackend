@@ -8,7 +8,7 @@ namespace Waao.API.Controllers;
 
 [ApiController]
 [Route("api/waao")]
-[Authorize]
+[Authorize(Policy = "Admin")]
 public class SkillsController(ISkillService Service) : ControllerBase
 {
 	private Guid Me => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
@@ -21,20 +21,17 @@ public class SkillsController(ISkillService Service) : ControllerBase
 		=> Ok(await Service.GetCatalogAsync(includeArchived, ct));
 
 	[HttpPost("skills")]
-	[Authorize(Policy = "HR")]
 	[ProducesResponseType(typeof(SkillDto), StatusCodes.Status201Created)]
 	public async Task<IActionResult> Create([FromBody] CreateSkillDto dto, CancellationToken ct)
 		=> Created(string.Empty, await Service.CreateAsync(dto, ct));
 
 	[HttpPut("skills/{id:guid}")]
-	[Authorize(Policy = "HR")]
 	[ProducesResponseType(typeof(SkillDto), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public async Task<IActionResult> Update(Guid id, [FromBody] UpdateSkillDto dto, CancellationToken ct)
 		=> Ok(await Service.UpdateAsync(id, dto, ct));
 
 	[HttpDelete("skills/{id:guid}")]
-	[Authorize(Policy = "HR")]
 	[ProducesResponseType(StatusCodes.Status204NoContent)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public async Task<IActionResult> Delete(Guid id, CancellationToken ct)

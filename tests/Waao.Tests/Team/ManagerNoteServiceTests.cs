@@ -33,18 +33,18 @@ public class ManagerNoteServiceTests
 	}
 
 	[Fact]
-	public async Task Manager_CanCreateAndReadNotes_ForDirectReport()
+	public async Task Admin_CanCreateAndReadNotes()
 	{
 		var db = TestDb.New();
 		var svc = Build(db);
-		var mgr = await Seed(db, "Mgr");
-		var report = await Seed(db, "Report", managerId: mgr.Id);
+		var admin = await Seed(db, "Admin", CollaboratorRoleKind.Admin);
+		var target = await Seed(db, "Target");
 
-		var note = await svc.CreateAsync(report.Id, new CreateManagerNoteDto { Body = "Doing great", Pinned = true }, mgr.Id);
-		note.AuthorId.Should().Be(mgr.Id);
-		note.AuthorName.Should().Be("Mgr");
+		var note = await svc.CreateAsync(target.Id, new CreateManagerNoteDto { Body = "Doing great", Pinned = true }, admin.Id);
+		note.AuthorId.Should().Be(admin.Id);
+		note.AuthorName.Should().Be("Admin");
 
-		var list = await svc.GetForCollaboratorAsync(report.Id, mgr.Id);
+		var list = await svc.GetForCollaboratorAsync(target.Id, admin.Id);
 		list.Should().ContainSingle().Which.Body.Should().Be("Doing great");
 	}
 
@@ -74,29 +74,40 @@ public class ManagerNoteServiceTests
 	}
 
 	[Fact]
-	public async Task Hr_CanReadAnyonesNotes()
+	public async Task Hr_CannotAccessNotes_Returns403()
 	{
 		var db = TestDb.New();
 		var svc = Build(db);
 		var hr = await Seed(db, "HR", CollaboratorRoleKind.HR);
 		var target = await Seed(db, "Target");
-		await svc.CreateAsync(target.Id, new CreateManagerNoteDto { Body = "Note" }, hr.Id);
 
-		var list = await svc.GetForCollaboratorAsync(target.Id, hr.Id);
-		list.Should().ContainSingle();
+		var act = async () => await svc.CreateAsync(target.Id, new CreateManagerNoteDto { Body = "Note" }, hr.Id);
+		await act.Should().ThrowAsync<ForbiddenAccessException>();
 	}
 
 	[Fact]
-	public async Task NonAuthorNonStaff_CannotEditNote_Returns403()
+	public async Task Manager_CannotAccessReportNotes_Returns403()
 	{
 		var db = TestDb.New();
 		var svc = Build(db);
 		var mgr = await Seed(db, "Mgr");
 		var report = await Seed(db, "Report", managerId: mgr.Id);
-		var note = await svc.CreateAsync(report.Id, new CreateManagerNoteDto { Body = "v1" }, mgr.Id);
 
-		var otherMgr = await Seed(db, "Other");
-		var act = async () => await svc.UpdateAsync(note.Id, new UpdateManagerNoteDto { Body = "hacked" }, otherMgr.Id);
+		var act = async () => await svc.GetForCollaboratorAsync(report.Id, mgr.Id);
+		await act.Should().ThrowAsync<ForbiddenAccessException>();
+	}
+
+	[Fact]
+	public async Task NonAuthorNonAdmin_CannotEditNote_Returns403()
+	{
+		var db = TestDb.New();
+		var svc = Build(db);
+		var admin = await Seed(db, "Admin", CollaboratorRoleKind.Admin);
+		var target = await Seed(db, "Target");
+		var note = await svc.CreateAsync(target.Id, new CreateManagerNoteDto { Body = "v1" }, admin.Id);
+
+		var other = await Seed(db, "Other");
+		var act = async () => await svc.UpdateAsync(note.Id, new UpdateManagerNoteDto { Body = "hacked" }, other.Id);
 		await act.Should().ThrowAsync<ForbiddenAccessException>();
 	}
 }
@@ -123,17 +134,17 @@ public class SkillServiceTests
 	}
 
 	[Fact]
-	public async Task Person_CanReadOwnSkills()
+	public async Task Person_CannotReadOwnSkills_Returns403()
 	{
 		var db = TestDb.New();
 		var svc = Build(db);
-		var hr = await Seed(db, "HR", CollaboratorRoleKind.HR);
+		var admin = await Seed(db, "Admin", CollaboratorRoleKind.Admin);
 		var person = await Seed(db, "Person");
 		var skill = await svc.CreateAsync(new CreateSkillDto { Name = "C#", Category = "Backend" });
-		await svc.UpsertForCollaboratorAsync(person.Id, skill.Id, new UpsertCollaboratorSkillDto { Level = SkillLevel.Expert }, hr.Id);
+		await svc.UpsertForCollaboratorAsync(person.Id, skill.Id, new UpsertCollaboratorSkillDto { Level = SkillLevel.Expert }, admin.Id);
 
-		var own = await svc.GetForCollaboratorAsync(person.Id, person.Id);
-		own.Should().ContainSingle().Which.Level.Should().Be(SkillLevel.Expert);
+		var act = async () => await svc.GetForCollaboratorAsync(person.Id, person.Id);
+		await act.Should().ThrowAsync<ForbiddenAccessException>();
 	}
 
 	[Fact]
@@ -150,20 +161,20 @@ public class SkillServiceTests
 	}
 
 	[Fact]
-	public async Task Manager_Upsert_IsIdempotent_OnSameSkill()
+	public async Task Admin_Upsert_IsIdempotent_OnSameSkill()
 	{
 		var db = TestDb.New();
 		var svc = Build(db);
-		var mgr = await Seed(db, "Mgr");
-		var report = await Seed(db, "Report", managerId: mgr.Id);
+		var admin = await Seed(db, "Admin", CollaboratorRoleKind.Admin);
+		var target = await Seed(db, "Target");
 		var skill = await svc.CreateAsync(new CreateSkillDto { Name = "SQL" });
 
-		await svc.UpsertForCollaboratorAsync(report.Id, skill.Id, new UpsertCollaboratorSkillDto { Level = SkillLevel.Beginner }, mgr.Id);
-		var second = await svc.UpsertForCollaboratorAsync(report.Id, skill.Id, new UpsertCollaboratorSkillDto { Level = SkillLevel.Proficient }, mgr.Id);
+		await svc.UpsertForCollaboratorAsync(target.Id, skill.Id, new UpsertCollaboratorSkillDto { Level = SkillLevel.Beginner }, admin.Id);
+		var second = await svc.UpsertForCollaboratorAsync(target.Id, skill.Id, new UpsertCollaboratorSkillDto { Level = SkillLevel.Proficient }, admin.Id);
 
 		second.Level.Should().Be(SkillLevel.Proficient);
-		var all = await svc.GetForCollaboratorAsync(report.Id, mgr.Id);
+		var all = await svc.GetForCollaboratorAsync(target.Id, admin.Id);
 		all.Should().ContainSingle();
-		all[0].AssessedById.Should().Be(mgr.Id);
+		all[0].AssessedById.Should().Be(admin.Id);
 	}
 }
