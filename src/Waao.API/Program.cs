@@ -112,6 +112,7 @@ builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IKanbanService, Waao.Services.Services.Kanban.KanbanService>();
 builder.Services.AddScoped<IAllocationService, Waao.Services.Services.Allocation.AllocationService>();
 builder.Services.AddScoped<ISkillService, Waao.Services.Services.Team.SkillService>();
+builder.Services.AddScoped<IDesignFlowService, Waao.Services.Services.Design.DesignFlowService>();
 builder.Services.AddScoped<IManagerNoteService, Waao.Services.Services.Team.ManagerNoteService>();
 builder.Services.AddScoped<IOnboardingService, OnboardingService>();
 builder.Services.AddScoped<ICourseService, CourseService>();
