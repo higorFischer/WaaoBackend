@@ -5,6 +5,7 @@ using Waao.Domain.Models.Entities;
 using Waao.Services.Abstractions.Services;
 using Waao.Domain.Models.Entities.Allocation;
 using Waao.Domain.Models.Entities.Calendar;
+using Waao.Domain.Models.Entities.Design;
 using Waao.Domain.Models.Entities.FeatureRequests;
 using Waao.Domain.Models.Entities.Kanban;
 using Waao.Domain.Models.Entities.Meetings;
@@ -125,6 +126,12 @@ public class WaaoDbContext : DbContext
 	// Team management — skills matrix + private manager notes
 	public DbSet<Skill> Skills => Set<Skill>();
 	public DbSet<CollaboratorSkill> CollaboratorSkills => Set<CollaboratorSkill>();
+
+	// Design Flow — freeform react-flow pipelines tracking a product's visual-identity launch
+	public DbSet<DesignFlow> DesignFlows => Set<DesignFlow>();
+	public DbSet<DesignStep> DesignSteps => Set<DesignStep>();
+	public DbSet<DesignStepEdge> DesignStepEdges => Set<DesignStepEdge>();
+	public DbSet<DesignAsset> DesignAssets => Set<DesignAsset>();
 	public DbSet<ManagerNote> ManagerNotes => Set<ManagerNote>();
 
 	// Voice/video call channels (Discord-style persistent rooms)
